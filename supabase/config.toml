@@ -1,1 +1,13 @@
 project_id = "uqmayojccagjtihevxyq"
+
+[functions.fetch-13f-filing]
+verify_jwt = false
+
+[functions.generate-portfolio-report]
+verify_jwt = false
+
+[functions.send-portfolio-email]
+verify_jwt = false
+
+[functions.check-new-filings]
+verify_jwt = false

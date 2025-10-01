@@ -14,7 +14,118 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      email_logs: {
+        Row: {
+          error_message: string | null
+          filing_id: string
+          id: string
+          recipient: string
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          error_message?: string | null
+          filing_id: string
+          id?: string
+          recipient: string
+          sent_at?: string | null
+          status: string
+        }
+        Update: {
+          error_message?: string | null
+          filing_id?: string
+          id?: string
+          recipient?: string
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_logs_filing_id_fkey"
+            columns: ["filing_id"]
+            isOneToOne: false
+            referencedRelation: "filings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      filings: {
+        Row: {
+          cik: string
+          company_name: string
+          created_at: string | null
+          filing_date: string
+          filing_url: string | null
+          id: string
+          quarter: string
+          year: number
+        }
+        Insert: {
+          cik: string
+          company_name: string
+          created_at?: string | null
+          filing_date: string
+          filing_url?: string | null
+          id?: string
+          quarter: string
+          year: number
+        }
+        Update: {
+          cik?: string
+          company_name?: string
+          created_at?: string | null
+          filing_date?: string
+          filing_url?: string | null
+          id?: string
+          quarter?: string
+          year?: number
+        }
+        Relationships: []
+      }
+      holdings: {
+        Row: {
+          company_name: string
+          created_at: string | null
+          cusip: string | null
+          filing_id: string
+          id: string
+          percentage_of_portfolio: number
+          shares: number | null
+          ticker: string | null
+          value_usd: number
+        }
+        Insert: {
+          company_name: string
+          created_at?: string | null
+          cusip?: string | null
+          filing_id: string
+          id?: string
+          percentage_of_portfolio: number
+          shares?: number | null
+          ticker?: string | null
+          value_usd: number
+        }
+        Update: {
+          company_name?: string
+          created_at?: string | null
+          cusip?: string | null
+          filing_id?: string
+          id?: string
+          percentage_of_portfolio?: number
+          shares?: number | null
+          ticker?: string | null
+          value_usd?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holdings_filing_id_fkey"
+            columns: ["filing_id"]
+            isOneToOne: false
+            referencedRelation: "filings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
