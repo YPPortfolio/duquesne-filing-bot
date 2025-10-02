@@ -12,8 +12,13 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let filingId: string = '';
+  let recipient: string = '';
+
   try {
-    const { filingId, recipient } = await req.json();
+    const requestBody = await req.json();
+    filingId = requestBody.filingId;
+    recipient = requestBody.recipient;
     
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -41,27 +46,41 @@ serve(async (req) => {
     // Generate HTML email
     const htmlContent = generateEmailHTML(reportData);
 
-    // Send email via Gmail SMTP
+    // Get email credentials from Lovable Secrets
+    const emailUser = Deno.env.get('GMAIL_USER');
+    const emailPass = Deno.env.get('GMAIL_APP_PASSWORD');
+
+    if (!emailUser || !emailPass) {
+      throw new Error('Email credentials not configured. Please set GMAIL_USER and GMAIL_APP_PASSWORD in Lovable Secrets.');
+    }
+
+    console.log("Configuring Gmail SMTP with user:", emailUser);
+
+    // Send email via Gmail SMTP (port 587 with STARTTLS)
     const client = new SMTPClient({
       connection: {
         hostname: "smtp.gmail.com",
-        port: 465,
+        port: 587,
         tls: true,
         auth: {
-          username: Deno.env.get('GMAIL_USER') ?? '',
-          password: Deno.env.get('GMAIL_APP_PASSWORD') ?? ''
+          username: emailUser,
+          password: emailPass
         }
       }
     });
 
+    console.log("Sending email to:", recipient);
+    
     await client.send({
-      from: Deno.env.get('GMAIL_USER') ?? '',
+      from: emailUser,
       to: recipient,
       subject: `Duquesne Family Office - ${reportData.currentFiling.quarter} ${reportData.currentFiling.year} Portfolio Update`,
       html: htmlContent
     });
 
     await client.close();
+
+    console.log("Email sent successfully");
 
     // Log the email delivery
     await supabase.from('email_logs').insert({
@@ -70,36 +89,48 @@ serve(async (req) => {
       status: 'sent'
     });
 
-    console.log("Email sent successfully to:", recipient);
+    console.log("Email logged successfully");
 
     return new Response(
-      JSON.stringify({ success: true, message: 'Email sent successfully' }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        status: 'success', 
+        message: 'Email sent successfully' 
+      }),
+      { 
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
     );
 
   } catch (error) {
-    console.error('Error sending email:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    console.error('Error sending email:', errorMessage);
+    console.error('Full error:', error);
     
-    // Try to log the error
-    try {
-      const supabase = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      );
-      
-      const { filingId, recipient } = await req.json();
-      await supabase.from('email_logs').insert({
-        filing_id: filingId,
-        recipient,
-        status: 'failed',
-        error_message: error instanceof Error ? error.message : 'Unknown error'
-      });
-    } catch (logError) {
-      console.error('Failed to log error:', logError);
+    // Log the error to database if we have filingId and recipient
+    if (filingId && recipient) {
+      try {
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        );
+        
+        await supabase.from('email_logs').insert({
+          filing_id: filingId,
+          recipient,
+          status: 'failed',
+          error_message: errorMessage
+        });
+      } catch (logError) {
+        console.error('Failed to log error to database:', logError);
+      }
     }
 
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ 
+        status: 'error', 
+        message: errorMessage 
+      }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
