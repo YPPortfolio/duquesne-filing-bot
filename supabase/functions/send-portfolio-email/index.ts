@@ -50,12 +50,12 @@ serve(async (req) => {
 
     console.log("Configuring Gmail SMTP with user:", emailUser);
 
-    // Send email via Gmail SMTP (port 587 with STARTTLS)
+    // Send email via Gmail SMTP (implicit SSL on 465)
     const client = new SMTPClient({
       connection: {
         hostname: "smtp.gmail.com",
-        port: 587,
-        tls: false, // use STARTTLS on port 587
+        port: 465,
+        tls: true,
         auth: {
           username: emailUser,
           password: emailPass
@@ -66,10 +66,11 @@ serve(async (req) => {
     console.log("Sending email to:", recipient);
     
     await client.send({
-      from: emailUser,
+      from: `Duquesne Filing Bot <${emailUser}>`,
       to: recipient,
       subject: `Duquesne Family Office - ${reportData.currentFiling.quarter} ${reportData.currentFiling.year} Portfolio Update`,
-      html: htmlContent
+      html: htmlContent,
+      content: 'auto'
     });
 
     await client.close();
