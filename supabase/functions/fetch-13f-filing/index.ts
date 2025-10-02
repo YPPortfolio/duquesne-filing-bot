@@ -56,10 +56,10 @@ serve(async (req) => {
     const processedFilings = [];
 
     for (const filing of recentThree) {
-      // Parse quarter and year from filing date
-      const filingDate = new Date(filing.filingDate);
-      const quarter = `Q${Math.floor(filingDate.getMonth() / 3) + 1}`;
-      const year = filingDate.getFullYear();
+      // Parse quarter and year from report date (not filing date!)
+      const reportDate = new Date(filing.reportDate);
+      const quarter = `Q${Math.floor(reportDate.getMonth() / 3) + 1}`;
+      const year = reportDate.getFullYear();
 
       // Check if we already have this filing
       const { data: existingFiling } = await supabase
@@ -75,16 +75,17 @@ serve(async (req) => {
         continue;
       }
 
-      // Fetch the information table (primary document)
+      // Construct the information table filename based on report date
       const accessionNoSlash = filing.accessionNumber.replace(/-/g, '');
-      const xmlUrl = `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${DUQUESNE_CIK}&type=13F-HR&dateb=&owner=exclude&count=100&search_text=`;
+      const reportDateStr = filing.reportDate.replace(/-/g, ''); // Convert YYYY-MM-DD to YYYYMMDD
+      const infoTableFilename = `form13f_${reportDateStr}.xml`;
       
       // Construct filing URL
       const filingUrl = `https://www.sec.gov/cgi-bin/viewer?action=view&cik=${DUQUESNE_CIK}&accession_number=${filing.accessionNumber}&xbrl_type=v`;
 
-      // Try to fetch the primary document (information table XML)
-      const docUrl = `https://www.sec.gov/Archives/edgar/data/${DUQUESNE_CIK}/${accessionNoSlash}/${filing.primaryDocument}`;
-      console.log("Fetching document:", docUrl);
+      // Fetch the information table XML (this contains the actual holdings)
+      const docUrl = `https://www.sec.gov/Archives/edgar/data/${DUQUESNE_CIK}/${accessionNoSlash}/${infoTableFilename}`;
+      console.log("Fetching information table:", docUrl);
 
       const docResponse = await fetch(docUrl, {
         headers: {
