@@ -16,6 +16,26 @@ export default function Dashboard() {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const { toast } = useToast();
 
+  // Keep the UI focused on only 3 quarters:
+  // 1) Latest available quarter
+  // 2) Quarter before the latest
+  // 3) Same quarter from 1 year before the latest
+  const getRelevantFilings = (list: any[]) => {
+    if (!list || list.length === 0) return [] as any[];
+    // Ensure sorted by date desc in case upstream changes
+    const sorted = [...list].sort(
+      (a, b) => new Date(b.filing_date).getTime() - new Date(a.filing_date).getTime()
+    );
+    const latest = sorted[0];
+    const result: any[] = [latest];
+    if (sorted.length > 1) result.push(sorted[1]);
+    const yearAgo = sorted.find(
+      (f) => f.quarter === latest.quarter && f.year === latest.year - 1
+    );
+    if (yearAgo && !result.find((r) => r.id === yearAgo.id)) result.push(yearAgo);
+    return result;
+  };
+
   useEffect(() => {
     loadFilings();
   }, []);
@@ -115,6 +135,8 @@ export default function Dashboard() {
     }
   };
 
+  const filteredFilings = getRelevantFilings(filings);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -160,7 +182,7 @@ export default function Dashboard() {
       {/* Quarter Selector */}
       <div className="container mx-auto px-4 py-6">
         <div className="flex gap-2 flex-wrap">
-          {filings.map((filing) => (
+          {filteredFilings.map((filing) => (
             <Button
               key={filing.id}
               onClick={() => {
