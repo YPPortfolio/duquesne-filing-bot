@@ -35,27 +35,27 @@ serve(async (req) => {
     }
 
     const submissionsData = await submissionsResponse.json();
-    const recentFilings = submissionsData.filings.recent;
+    const allFilings = submissionsData.filings.recent;
 
     // Find 13F-HR filings
     const filings13F = [];
-    for (let i = 0; i < recentFilings.form.length; i++) {
-      if (recentFilings.form[i] === '13F-HR') {
+    for (let i = 0; i < allFilings.form.length; i++) {
+      if (allFilings.form[i] === '13F-HR') {
         filings13F.push({
-          accessionNumber: recentFilings.accessionNumber[i],
-          filingDate: recentFilings.filingDate[i],
-          reportDate: recentFilings.reportDate[i],
-          primaryDocument: recentFilings.primaryDocument[i]
+          accessionNumber: allFilings.accessionNumber[i],
+          filingDate: allFilings.filingDate[i],
+          reportDate: allFilings.reportDate[i],
+          primaryDocument: allFilings.primaryDocument[i]
         });
       }
     }
 
-    // Get the 3 most recent filings
-    const recentThree = filings13F.slice(0, 3);
+    // Get up to 8 quarters (2 years) of filings for year-over-year comparison
+    const recentFilings = filings13F.slice(0, 8);
     
     const processedFilings = [];
 
-    for (const filing of recentThree) {
+    for (const filing of recentFilings) {
       // Parse quarter and year from report date (not filing date!)
       const reportDate = new Date(filing.reportDate);
       const quarter = `Q${Math.floor(reportDate.getMonth() / 3) + 1}`;
