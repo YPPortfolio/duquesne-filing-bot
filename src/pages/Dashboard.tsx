@@ -52,7 +52,7 @@ export default function Dashboard() {
         description: error.message,
         variant: "destructive"
       });
-      return;
+      return [] as any[];
     }
 
     setFilings(data || []);
@@ -60,6 +60,7 @@ export default function Dashboard() {
       loadReport(data[0].id);
       setSelectedFiling(data[0]);
     }
+    return data || [];
   };
 
   const loadReport = async (filingId: string) => {
@@ -85,16 +86,26 @@ export default function Dashboard() {
   const fetchNewFilings = async () => {
     setIsFetchingNew(true);
     try {
-      const { data, error } = await supabase.functions.invoke('fetch-13f-filing');
+      const { data, error } = await supabase.functions.invoke('fetch-13f-filing', {
+        headers: { 'cache-control': 'no-cache' },
+      });
       
       if (error) throw error;
       
       toast({
         title: "Success",
-        description: data.message || "Filings checked successfully"
+        description: data?.message || "Filings checked successfully"
       });
       
-      await loadFilings();
+      const newList = await loadFilings();
+      const filtered = getRelevantFilings(newList || []);
+      if (filtered.length > 0) {
+        setSelectedFiling(filtered[0]);
+        await loadReport(filtered[0].id);
+      } else {
+        setSelectedFiling(null);
+        setReportData(null);
+      }
     } catch (error: any) {
       toast({
         title: "Error fetching filings",
