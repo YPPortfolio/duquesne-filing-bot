@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const DUQUESNE_CIK = "0001067293"; // Duquesne Family Office LLC CIK
+const DUQUESNE_CIK = "0001536411"; // Duquesne Family Office LLC CIK
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
