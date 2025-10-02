@@ -27,22 +27,16 @@ serve(async (req) => {
 
     console.log("Sending portfolio email for filing:", filingId);
 
-    // Generate the report first
-    const reportResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-portfolio-report`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-      },
-      body: JSON.stringify({ filingId })
+    // Generate the report first using the Supabase client (no direct HTTP fetch)
+    const { data: reportData, error: reportError } = await supabase.functions.invoke('generate-portfolio-report', {
+      body: { filingId }
     });
 
-    if (!reportResponse.ok) {
-      throw new Error('Failed to generate report');
+    if (reportError) {
+      console.error('generate-portfolio-report error:', reportError);
+      throw new Error(`Failed to generate report: ${reportError.message || 'unknown error'}`);
     }
 
-    const reportData = await reportResponse.json();
-    
     // Generate HTML email
     const htmlContent = generateEmailHTML(reportData);
 
@@ -61,7 +55,7 @@ serve(async (req) => {
       connection: {
         hostname: "smtp.gmail.com",
         port: 587,
-        tls: true,
+        tls: false, // use STARTTLS on port 587
         auth: {
           username: emailUser,
           password: emailPass
