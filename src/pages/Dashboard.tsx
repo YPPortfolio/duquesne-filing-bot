@@ -131,14 +131,28 @@ export default function Dashboard() {
 
       if (error) throw error;
       
-      toast({
-        title: "Email sent",
-        description: "Portfolio report has been emailed successfully"
-      });
+      // Display the backend response message
+      if (data?.status === 'success') {
+        toast({
+          title: "Success",
+          description: data.message || "Portfolio report has been emailed successfully"
+        });
+      } else if (data?.status === 'error') {
+        toast({
+          title: "Email Error",
+          description: data.message || "Failed to send email",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Email sent",
+          description: "Portfolio report has been emailed successfully"
+        });
+      }
     } catch (error: any) {
       toast({
         title: "Error sending email",
-        description: error.message,
+        description: error.message || "An unexpected error occurred",
         variant: "destructive"
       });
     } finally {

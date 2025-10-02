@@ -47,11 +47,11 @@ serve(async (req) => {
     const htmlContent = generateEmailHTML(reportData);
 
     // Get email credentials from Lovable Secrets
-    const emailUser = Deno.env.get('GMAIL_USER');
-    const emailPass = Deno.env.get('GMAIL_APP_PASSWORD');
+    const emailUser = Deno.env.get('EMAIL_USER');
+    const emailPass = Deno.env.get('EMAIL_PASS');
 
     if (!emailUser || !emailPass) {
-      throw new Error('Email credentials not configured. Please set GMAIL_USER and GMAIL_APP_PASSWORD in Lovable Secrets.');
+      throw new Error('Email credentials not configured. Please set EMAIL_USER and EMAIL_PASS in Lovable Secrets (Project Settings → Secrets).');
     }
 
     console.log("Configuring Gmail SMTP with user:", emailUser);
