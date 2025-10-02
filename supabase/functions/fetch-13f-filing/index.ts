@@ -50,8 +50,39 @@ serve(async (req) => {
       }
     }
 
-    // Get up to 8 quarters (2 years) of filings for year-over-year comparison
-    const recentFilings = filings13F.slice(0, 8);
+    // Get only the 3 specific quarters needed:
+    // 1. Latest quarter
+    // 2. Prior quarter (one before latest)
+    // 3. Same quarter from 1 year ago
+    const recentFilings = [];
+    
+    if (filings13F.length > 0) {
+      // Get latest quarter
+      const latest = filings13F[0];
+      recentFilings.push(latest);
+      
+      // Get prior quarter (second most recent)
+      if (filings13F.length > 1) {
+        recentFilings.push(filings13F[1]);
+      }
+      
+      // Find same quarter from 1 year ago
+      const latestReportDate = new Date(latest.reportDate);
+      const latestQuarter = Math.floor(latestReportDate.getMonth() / 3) + 1;
+      const latestYear = latestReportDate.getFullYear();
+      const targetYear = latestYear - 1;
+      
+      const yearAgoFiling = filings13F.find(f => {
+        const reportDate = new Date(f.reportDate);
+        const quarter = Math.floor(reportDate.getMonth() / 3) + 1;
+        const year = reportDate.getFullYear();
+        return quarter === latestQuarter && year === targetYear;
+      });
+      
+      if (yearAgoFiling) {
+        recentFilings.push(yearAgoFiling);
+      }
+    }
     
     const processedFilings = [];
 
