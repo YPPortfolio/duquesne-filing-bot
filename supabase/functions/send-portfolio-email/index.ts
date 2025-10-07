@@ -146,6 +146,28 @@ function generateEmailHTML(reportData: any): string {
   const changeColor = (value: number) => 
     value >= 0 ? '#10B981' : '#EF4444';
 
+  // Format summary with proper paragraph breaks for better Gmail readability
+  const formatSummary = (text: string) => {
+    return text
+      .split('**')
+      .map((part, index) => {
+        // Bold the sections between ** markers
+        if (index % 2 === 1) {
+          return `<strong>${part}</strong>`;
+        }
+        return part;
+      })
+      .join('')
+      .split('. ')
+      .map(sentence => sentence.trim())
+      .filter(sentence => sentence.length > 0)
+      .map(sentence => sentence.endsWith('.') ? sentence : sentence + '.')
+      .join(' ')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(\d+\.\s)/g, '<br><br>$1')
+      .replace(/(Quarter-over-Quarter Changes:|Year-over-Year Trends:|Concentration and Diversification:)/g, '<br><br><strong>$1</strong><br>');
+  };
+
   const topHoldings = comparisonData.slice(0, 15);
 
   let tableRows = '';
@@ -186,7 +208,7 @@ function generateEmailHTML(reportData: any): string {
     <!-- AI Summary -->
     <div style="background: white; padding: 24px; border-radius: 12px; margin-bottom: 30px; border-left: 4px solid #3B82F6;">
       <h2 style="margin: 0 0 16px 0; font-size: 20px; color: #1F2937;">Executive Summary</h2>
-      <p style="margin: 0; color: #4B5563; line-height: 1.6;">${summary}</p>
+      <div style="margin: 0; color: #4B5563; line-height: 1.8; font-size: 14px;">${formatSummary(summary)}</div>
     </div>
 
     <!-- Portfolio Table -->
