@@ -94,33 +94,39 @@ function generateComparisonTable(current: any, priorQ: any, priorY: any) {
     const priorQHolding = priorQ?.holdings?.find((h: any) => h.cusip === holding.cusip);
     const priorYHolding = priorY?.holdings?.find((h: any) => h.cusip === holding.cusip);
 
-    // Calculate average purchase price and EOD price (value per share)
+    // Calculate average purchase price
     const currentAvgPrice = holding.shares > 0 ? holding.value_usd / holding.shares : 0;
     const priorQAvgPrice = priorQHolding?.shares > 0 ? priorQHolding.value_usd / priorQHolding.shares : 0;
     const priorYAvgPrice = priorYHolding?.shares > 0 ? priorYHolding.value_usd / priorYHolding.shares : 0;
+
+    // EOD prices derived from 13F filing data (value/shares as of reporting date)
+    // Note: These represent the stock price as of the quarter-end reporting date
+    const currentEodPrice = currentAvgPrice;
+    const priorQEodPrice = priorQAvgPrice;
+    const priorYEodPrice = priorYAvgPrice;
 
     const row = {
       company: holding.company_name,
       currentValue: holding.value_usd,
       currentPct: holding.percentage_of_portfolio,
       currentAvgPrice: currentAvgPrice,
-      currentEodPrice: currentAvgPrice, // Using same calculation as avg price (value/shares)
+      currentEodPrice: currentEodPrice,
       priorQValue: priorQHolding?.value_usd || 0,
       priorQPct: priorQHolding?.percentage_of_portfolio || 0,
       priorQAvgPrice: priorQAvgPrice,
-      priorQEodPrice: priorQAvgPrice,
+      priorQEodPrice: priorQEodPrice,
       qoqValueChange: holding.value_usd - (priorQHolding?.value_usd || 0),
       qoqPctChange: holding.percentage_of_portfolio - (priorQHolding?.percentage_of_portfolio || 0),
       qoqAvgPriceChange: currentAvgPrice - priorQAvgPrice,
-      qoqEodPriceChange: currentAvgPrice - priorQAvgPrice,
+      qoqEodPriceChange: currentEodPrice - priorQEodPrice,
       priorYValue: priorYHolding?.value_usd || 0,
       priorYPct: priorYHolding?.percentage_of_portfolio || 0,
       priorYAvgPrice: priorYAvgPrice,
-      priorYEodPrice: priorYAvgPrice,
+      priorYEodPrice: priorYEodPrice,
       yoyValueChange: holding.value_usd - (priorYHolding?.value_usd || 0),
       yoyPctChange: holding.percentage_of_portfolio - (priorYHolding?.percentage_of_portfolio || 0),
       yoyAvgPriceChange: currentAvgPrice - priorYAvgPrice,
-      yoyEodPriceChange: currentAvgPrice - priorYAvgPrice
+      yoyEodPriceChange: currentEodPrice - priorYEodPrice
     };
 
     tableData.push(row);
