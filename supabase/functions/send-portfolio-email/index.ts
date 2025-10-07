@@ -70,7 +70,7 @@ serve(async (req) => {
       to: recipient,
       subject: `Duquesne Family Office - ${reportData.currentFiling.quarter} ${reportData.currentFiling.year} Portfolio Update`,
       html: htmlContent,
-      content: 'auto'
+      content: 'text/html'
     });
 
     await client.close();
@@ -172,62 +172,86 @@ function generateEmailHTML(reportData: any): string {
 
   let tableRows = '';
   for (const holding of topHoldings) {
+    const qoqValueClass = holding.qoqValueChange >= 0 ? 'positive' : 'negative';
+    const qoqPctClass = holding.qoqPctChange >= 0 ? 'positive' : 'negative';
+    const yoyValueClass = holding.yoyValueChange >= 0 ? 'positive' : 'negative';
+    const yoyPctClass = holding.yoyPctChange >= 0 ? 'positive' : 'negative';
+    
     tableRows += `
-      <tr style="border-bottom: 1px solid #E5E7EB;">
-        <td style="padding: 12px 8px; text-align: left; font-weight: 500;">${holding.company}</td>
-        <td style="padding: 12px 8px; text-align: right;">${formatCurrency(holding.currentValue)}</td>
-        <td style="padding: 12px 8px; text-align: right;">${holding.currentPct.toFixed(2)}%</td>
-        <td style="padding: 12px 8px; text-align: right;">${formatCurrency(holding.priorQValue)}</td>
-        <td style="padding: 12px 8px; text-align: right;">${holding.priorQPct.toFixed(2)}%</td>
-        <td style="padding: 12px 8px; text-align: right; color: ${changeColor(holding.qoqValueChange)};">${formatCurrency(holding.qoqValueChange)}</td>
-        <td style="padding: 12px 8px; text-align: right; color: ${changeColor(holding.qoqPctChange)};">${formatPercent(holding.qoqPctChange)}</td>
-        <td style="padding: 12px 8px; text-align: right;">${formatCurrency(holding.priorYValue)}</td>
-        <td style="padding: 12px 8px; text-align: right;">${holding.priorYPct.toFixed(2)}%</td>
-        <td style="padding: 12px 8px; text-align: right; color: ${changeColor(holding.yoyValueChange)};">${formatCurrency(holding.yoyValueChange)}</td>
-        <td style="padding: 12px 8px; text-align: right; color: ${changeColor(holding.yoyPctChange)};">${formatPercent(holding.yoyPctChange)}</td>
+      <tr>
+        <td class="company">${holding.company}</td>
+        <td class="right">${formatCurrency(holding.currentValue)}</td>
+        <td class="right">${holding.currentPct.toFixed(2)}%</td>
+        <td class="right">${formatCurrency(holding.priorQValue)}</td>
+        <td class="right">${holding.priorQPct.toFixed(2)}%</td>
+        <td class="right ${qoqValueClass}">${formatCurrency(holding.qoqValueChange)}</td>
+        <td class="right ${qoqPctClass}">${formatPercent(holding.qoqPctChange)}</td>
+        <td class="right">${formatCurrency(holding.priorYValue)}</td>
+        <td class="right">${holding.priorYPct.toFixed(2)}%</td>
+        <td class="right ${yoyValueClass}">${formatCurrency(holding.yoyValueChange)}</td>
+        <td class="right ${yoyPctClass}">${formatPercent(holding.yoyPctChange)}</td>
       </tr>
     `;
   }
 
   return `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Portfolio Update</title>
+  <style type="text/css">
+    body { margin: 0; padding: 0; font-family: Arial, sans-serif; font-size: 13px; background-color: #f5f5f5; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .header { background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%); color: #ffffff; padding: 30px; border-radius: 8px; margin-bottom: 20px; }
+    .header h1 { margin: 0 0 10px 0; font-size: 24px; font-weight: bold; }
+    .header p { margin: 0; font-size: 16px; }
+    .summary { background: #ffffff; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #3B82F6; }
+    .summary h2 { margin: 0 0 12px 0; font-size: 18px; font-weight: bold; color: #1F2937; }
+    .summary-text { color: #4B5563; line-height: 1.7; }
+    .table-container { background: #ffffff; padding: 20px; border-radius: 8px; }
+    .table-container h2 { margin: 0 0 16px 0; font-size: 18px; font-weight: bold; color: #1F2937; }
+    table { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 13px; }
+    thead tr { background-color: #F3F4F6; }
+    th { padding: 10px 8px; text-align: left; font-weight: bold; color: #374151; border-bottom: 2px solid #E5E7EB; }
+    th.right { text-align: right; }
+    td { padding: 10px 8px; border-bottom: 1px solid #E5E7EB; color: #1F2937; }
+    td.right { text-align: right; }
+    td.company { font-weight: 500; }
+    .positive { color: #10B981; }
+    .negative { color: #EF4444; }
+    .footer { text-align: center; margin-top: 20px; padding: 16px; color: #6B7280; font-size: 12px; }
+  </style>
 </head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F9FAFB;">
-  <div style="max-width: 1200px; margin: 0 auto; padding: 20px;">
-    <!-- Header -->
-    <div style="background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%); color: white; padding: 30px; border-radius: 12px; margin-bottom: 30px;">
-      <h1 style="margin: 0 0 10px 0; font-size: 28px; font-weight: 700;">Duquesne Family Office LLC</h1>
-      <p style="margin: 0; font-size: 18px; opacity: 0.9;">${currentFiling.quarter} ${currentFiling.year} Portfolio Update</p>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Duquesne Family Office LLC</h1>
+      <p>${currentFiling.quarter} ${currentFiling.year} Portfolio Update</p>
     </div>
 
-    <!-- AI Summary -->
-    <div style="background: white; padding: 24px; border-radius: 12px; margin-bottom: 30px; border-left: 4px solid #3B82F6;">
-      <h2 style="margin: 0 0 16px 0; font-size: 20px; color: #1F2937;">Executive Summary</h2>
-      <div style="margin: 0; color: #4B5563; line-height: 1.8; font-size: 14px;">${formatSummary(summary)}</div>
+    <div class="summary">
+      <h2>Executive Summary</h2>
+      <div class="summary-text">${formatSummary(summary)}</div>
     </div>
 
-    <!-- Portfolio Table -->
-    <div style="background: white; padding: 24px; border-radius: 12px; overflow-x: auto;">
-      <h2 style="margin: 0 0 20px 0; font-size: 20px; color: #1F2937;">Portfolio Holdings</h2>
-      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+    <div class="table-container">
+      <h2>Portfolio Holdings</h2>
+      <table cellpadding="0" cellspacing="0" border="0">
         <thead>
-          <tr style="background-color: #F3F4F6; border-bottom: 2px solid #E5E7EB;">
-            <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #374151;">Company</th>
-            <th style="padding: 12px 8px; text-align: right; font-weight: 600; color: #374151;">Current ($)</th>
-            <th style="padding: 12px 8px; text-align: right; font-weight: 600; color: #374151;">Current (%)</th>
-            <th style="padding: 12px 8px; text-align: right; font-weight: 600; color: #374151;">Prior Q ($)</th>
-            <th style="padding: 12px 8px; text-align: right; font-weight: 600; color: #374151;">Prior Q (%)</th>
-            <th style="padding: 12px 8px; text-align: right; font-weight: 600; color: #374151;">QoQ Δ ($)</th>
-            <th style="padding: 12px 8px; text-align: right; font-weight: 600; color: #374151;">QoQ Δ (%)</th>
-            <th style="padding: 12px 8px; text-align: right; font-weight: 600; color: #374151;">Prior Y ($)</th>
-            <th style="padding: 12px 8px; text-align: right; font-weight: 600; color: #374151;">Prior Y (%)</th>
-            <th style="padding: 12px 8px; text-align: right; font-weight: 600; color: #374151;">YoY Δ ($)</th>
-            <th style="padding: 12px 8px; text-align: right; font-weight: 600; color: #374151;">YoY Δ (%)</th>
+          <tr>
+            <th>Company</th>
+            <th class="right">Current ($)</th>
+            <th class="right">Current (%)</th>
+            <th class="right">Prior Q ($)</th>
+            <th class="right">Prior Q (%)</th>
+            <th class="right">QoQ &Delta; ($)</th>
+            <th class="right">QoQ &Delta; (%)</th>
+            <th class="right">Prior Y ($)</th>
+            <th class="right">Prior Y (%)</th>
+            <th class="right">YoY &Delta; ($)</th>
+            <th class="right">YoY &Delta; (%)</th>
           </tr>
         </thead>
         <tbody>
@@ -236,10 +260,9 @@ function generateEmailHTML(reportData: any): string {
       </table>
     </div>
 
-    <!-- Footer -->
-    <div style="text-align: center; margin-top: 30px; padding: 20px; color: #6B7280; font-size: 12px;">
-      <p style="margin: 0;">Automated Portfolio Tracker | Filing Date: ${currentFiling.filing_date}</p>
-      <p style="margin: 8px 0 0 0;">Data source: SEC 13F-HR Filings</p>
+    <div class="footer">
+      <p>Automated Portfolio Tracker | Filing Date: ${currentFiling.filing_date}</p>
+      <p>Data source: SEC 13F-HR Filings</p>
     </div>
   </div>
 </body>
