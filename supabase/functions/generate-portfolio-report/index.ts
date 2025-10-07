@@ -6,6 +6,62 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper function to get quarter-end reporting date
+function getQuarterEndDate(quarter: string, year: number): string {
+  const quarterEndDates: { [key: string]: string } = {
+    'Q1': `${year}-03-31`,
+    'Q2': `${year}-06-30`,
+    'Q3': `${year}-09-30`,
+    'Q4': `${year}-12-31`,
+  };
+  return quarterEndDates[quarter] || `${year}-12-31`;
+}
+
+// Helper function to fetch EOD price from Yahoo Finance
+async function getEodPrice(ticker: string | null, reportDate: string): Promise<number> {
+  if (!ticker) {
+    console.log('No ticker provided, skipping EOD price fetch');
+    return 0;
+  }
+
+  try {
+    // Convert date to Unix timestamp
+    const date = new Date(reportDate);
+    const startTimestamp = Math.floor(date.getTime() / 1000);
+    const endTimestamp = startTimestamp + 86400; // Add 1 day
+
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`;
+    
+    console.log(`Fetching EOD price for ${ticker} on ${reportDate}`);
+    
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0'
+      }
+    });
+
+    if (!response.ok) {
+      console.error(`Yahoo Finance API error for ${ticker}: ${response.status}`);
+      return 0;
+    }
+
+    const data = await response.json();
+    const quotes = data?.chart?.result?.[0]?.indicators?.quote?.[0];
+    
+    if (quotes && quotes.close && quotes.close.length > 0) {
+      const closePrice = quotes.close[quotes.close.length - 1];
+      console.log(`EOD price for ${ticker}: $${closePrice}`);
+      return closePrice || 0;
+    }
+
+    console.log(`No price data found for ${ticker} on ${reportDate}`);
+    return 0;
+  } catch (error) {
+    console.error(`Error fetching EOD price for ${ticker}:`, error);
+    return 0;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -52,8 +108,8 @@ serve(async (req) => {
       .eq('year', priorYear)
       .maybeSingle();
 
-    // Generate comparison table
-    const comparisonData = generateComparisonTable(
+    // Generate comparison table with EOD prices
+    const comparisonData = await generateComparisonTable(
       currentFiling,
       priorQuarterFiling,
       priorYearFiling
@@ -86,9 +142,16 @@ serve(async (req) => {
   }
 });
 
-function generateComparisonTable(current: any, priorQ: any, priorY: any) {
+async function generateComparisonTable(current: any, priorQ: any, priorY: any) {
   const tableData = [];
   const currentHoldings = current.holdings || [];
+
+  // Get reporting dates for each period
+  const currentReportDate = getQuarterEndDate(current.quarter, current.year);
+  const priorQReportDate = priorQ ? getQuarterEndDate(priorQ.quarter, priorQ.year) : '';
+  const priorYReportDate = priorY ? getQuarterEndDate(priorY.quarter, priorY.year) : '';
+
+  console.log(`Report dates - Current: ${currentReportDate}, Prior Q: ${priorQReportDate}, Prior Y: ${priorYReportDate}`);
 
   for (const holding of currentHoldings) {
     const priorQHolding = priorQ?.holdings?.find((h: any) => h.cusip === holding.cusip);
@@ -99,34 +162,33 @@ function generateComparisonTable(current: any, priorQ: any, priorY: any) {
     const priorQAvgPrice = priorQHolding?.shares > 0 ? priorQHolding.value_usd / priorQHolding.shares : 0;
     const priorYAvgPrice = priorYHolding?.shares > 0 ? priorYHolding.value_usd / priorYHolding.shares : 0;
 
-    // EOD prices derived from 13F filing data (value/shares as of reporting date)
-    // Note: These represent the stock price as of the quarter-end reporting date
-    const currentEodPrice = currentAvgPrice;
-    const priorQEodPrice = priorQAvgPrice;
-    const priorYEodPrice = priorYAvgPrice;
+    // Fetch real EOD prices from Yahoo Finance
+    const currentEodPrice = await getEodPrice(holding.ticker, currentReportDate);
+    const priorQEodPrice = priorQReportDate && priorQHolding ? await getEodPrice(priorQHolding.ticker, priorQReportDate) : 0;
+    const priorYEodPrice = priorYReportDate && priorYHolding ? await getEodPrice(priorYHolding.ticker, priorYReportDate) : 0;
 
     const row = {
       company: holding.company_name,
       currentValue: holding.value_usd,
       currentPct: holding.percentage_of_portfolio,
       currentAvgPrice: currentAvgPrice,
-      currentEodPrice: currentEodPrice,
+      currentEodPrice: currentEodPrice || currentAvgPrice, // Fallback to avg price if API fails
       priorQValue: priorQHolding?.value_usd || 0,
       priorQPct: priorQHolding?.percentage_of_portfolio || 0,
       priorQAvgPrice: priorQAvgPrice,
-      priorQEodPrice: priorQEodPrice,
+      priorQEodPrice: priorQEodPrice || priorQAvgPrice,
       qoqValueChange: holding.value_usd - (priorQHolding?.value_usd || 0),
       qoqPctChange: holding.percentage_of_portfolio - (priorQHolding?.percentage_of_portfolio || 0),
       qoqAvgPriceChange: currentAvgPrice - priorQAvgPrice,
-      qoqEodPriceChange: currentEodPrice - priorQEodPrice,
+      qoqEodPriceChange: (currentEodPrice || currentAvgPrice) - (priorQEodPrice || priorQAvgPrice),
       priorYValue: priorYHolding?.value_usd || 0,
       priorYPct: priorYHolding?.percentage_of_portfolio || 0,
       priorYAvgPrice: priorYAvgPrice,
-      priorYEodPrice: priorYEodPrice,
+      priorYEodPrice: priorYEodPrice || priorYAvgPrice,
       yoyValueChange: holding.value_usd - (priorYHolding?.value_usd || 0),
       yoyPctChange: holding.percentage_of_portfolio - (priorYHolding?.percentage_of_portfolio || 0),
       yoyAvgPriceChange: currentAvgPrice - priorYAvgPrice,
-      yoyEodPriceChange: currentEodPrice - priorYEodPrice
+      yoyEodPriceChange: (currentEodPrice || currentAvgPrice) - (priorYEodPrice || priorYAvgPrice)
     };
 
     tableData.push(row);
