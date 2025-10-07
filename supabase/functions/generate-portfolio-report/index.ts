@@ -163,12 +163,9 @@ Keep the summary professional, data-driven, and under 200 words.`;
     let summary = data.choices[0]?.message?.content || "AI summary unavailable";
     
     // Post-process to ensure all dollar amounts have "$" symbol
-    // Fix patterns like (+123.4M) or (-123.4M) or (123.4M) to include $
-    summary = summary.replace(/\(([+-]?)(\d+\.?\d*[MB])\)/g, '($1$$$2)');
-    // Fix patterns like +123.4M or -123.4M that are missing $
-    summary = summary.replace(/([+-])(\d+\.?\d*[MB])\b/g, '$1$$$2');
-    // Fix standalone amounts like 123.4M that are missing $ (but not if already has $)
-    summary = summary.replace(/\b(?<!\$)(\d+\.?\d*[MB])\b/g, '$$$1');
+    // Match complete numbers (with optional decimals) followed by M or B
+    // Only add $ if not already present
+    summary = summary.replace(/(?<!\$)\b(\d+(?:\.\d+)?[MB])\b/g, '$$$1');
     
     return summary;
   } catch (error) {
