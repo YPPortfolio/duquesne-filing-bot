@@ -161,12 +161,17 @@ Keep the summary professional, data-driven, and under 200 words.`;
 
     const data = await response.json();
     let summary = data.choices[0]?.message?.content || "AI summary unavailable";
-    
-    // Post-process to ensure all dollar amounts have "$" symbol
-    // Match complete numbers (with optional decimals) followed by M or B
-    // Only add $ if not already present
-    summary = summary.replace(/(?<!\$)\b(\d+(?:\.\d+)?[MB])\b/g, '$$$1');
-    
+
+    // Fix cases where a stray "$" appears after a decimal (e.g., $132.$7M -> $132.7M)
+    summary = summary.replace(/(\d)\.\$(\d)/g, '$1.$2');
+
+    // Add a single "$" before amounts like 132.7M or +122.3M only when not already present
+    // Do NOT match if preceded by a digit or a dot to avoid hitting the fractional part
+    summary = summary.replace(/(?<![\$\d\.])(\d+(?:\.\d+)?[MB])\b/g, '$$$1');
+
+    // Collapse any accidental multiple dollar signs (e.g., $$132.7M -> $132.7M)
+    summary = summary.replace(/\${2,}/g, '$');
+
     return summary;
   } catch (error) {
     console.error('Error generating AI summary:', error);
