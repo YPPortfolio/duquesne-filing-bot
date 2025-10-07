@@ -8,7 +8,11 @@ const corsHeaders = {
 
 // Helper function to normalize ticker symbols for Yahoo Finance
 function normalizeTicker(ticker: string): string {
-  return ticker.replace(/\./g, '-').trim().toUpperCase();
+  if (!ticker) return '';
+  let normalized = ticker.trim().toUpperCase();
+  normalized = normalized.replace(/\./g, '-'); // BRK.B -> BRK-B
+  normalized = normalized.replace(/\s+/g, ''); // Remove spaces
+  return normalized;
 }
 
 // Helper function to convert CUSIP to ticker via OpenFIGI API
@@ -65,122 +69,124 @@ function getQuarterEndDate(quarter: string, year: number): string {
   return quarterEndDates[quarter] || `${year}-12-31`;
 }
 
-// Helper function to fetch EOD price with database caching and retries
+// Helper function to fetch EOD price with lookback for most recent trading day
 async function getEodPrice(
   supabase: any,
   ticker: string | null,
   reportDate: string,
-  retries: number = 3
-): Promise<number | null> {
+  lookbackDays: number = 7,
+  retries: number = 2
+): Promise<{ price: number | null; actualDate: string | null }> {
   if (!ticker) {
-    console.log('No ticker provided, skipping EOD price fetch');
-    return null;
+    console.log('[EOD] No ticker provided, skipping');
+    return { price: null, actualDate: null };
   }
 
   const normalizedTicker = normalizeTicker(ticker);
-  const cacheKey = `${normalizedTicker}-${reportDate}`;
-
-  // Check database cache first
-  try {
-    const { data: cachedPrice } = await supabase
-      .from('price_cache')
-      .select('price')
-      .eq('ticker', normalizedTicker)
-      .eq('report_date', reportDate)
-      .maybeSingle();
-
-    if (cachedPrice) {
-      console.log(`Using cached price from database for ${normalizedTicker} on ${reportDate}: $${cachedPrice.price}`);
-      return cachedPrice.price;
-    }
-  } catch (error) {
-    console.error(`Error checking price cache:`, error);
+  if (!normalizedTicker) {
+    console.log('[EOD] Ticker normalization failed');
+    return { price: null, actualDate: null };
   }
 
-  // Fetch from Yahoo Finance with retries
-  for (let attempt = 1; attempt <= retries; attempt++) {
+  const anchorDate = new Date(reportDate);
+  
+  // Walk backward to find the most recent trading day
+  for (let offset = 0; offset <= lookbackDays; offset++) {
+    const checkDate = new Date(anchorDate);
+    checkDate.setDate(checkDate.getDate() - offset);
+    const checkDateStr = checkDate.toISOString().split('T')[0];
+    
+    // Check database cache first
     try {
-      const date = new Date(reportDate);
-      const startTimestamp = Math.floor(date.getTime() / 1000);
-      const endTimestamp = startTimestamp + 86400;
+      const { data: cachedPrice } = await supabase
+        .from('price_cache')
+        .select('price')
+        .eq('ticker', normalizedTicker)
+        .eq('report_date', checkDateStr)
+        .maybeSingle();
 
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${normalizedTicker}?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`;
-      
-      console.log(`[Attempt ${attempt}/${retries}] Fetching EOD price for ${normalizedTicker} on ${reportDate}`);
-      
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0'
-        }
-      });
-
-      if (!response.ok) {
-        console.error(`Yahoo Finance API error for ${normalizedTicker}: ${response.status}`);
-        if (attempt < retries) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-          continue;
-        }
-        break;
+      if (cachedPrice && cachedPrice.price !== null) {
+        console.log(`[EOD] Using cached price for ${normalizedTicker} on ${checkDateStr}: $${cachedPrice.price}`);
+        return { price: cachedPrice.price, actualDate: checkDateStr };
       }
-
-      const data = await response.json();
-      const quotes = data?.chart?.result?.[0]?.indicators?.quote?.[0];
-      
-      if (quotes && quotes.close && quotes.close.length > 0) {
-        const closePrice = quotes.close[quotes.close.length - 1];
-        const roundedPrice = Math.round(closePrice * 100) / 100;
-        
-        console.log(`EOD price for ${normalizedTicker}: $${roundedPrice}`);
-        
-        // Save to database cache
-        try {
-          await supabase
-            .from('price_cache')
-            .upsert({
-              ticker: normalizedTicker,
-              report_date: reportDate,
-              price: roundedPrice
-            }, {
-              onConflict: 'ticker,report_date'
-            });
-        } catch (error) {
-          console.error(`Error saving to price cache:`, error);
-        }
-        
-        return roundedPrice;
-      }
-
-      console.log(`No price data found for ${normalizedTicker} on ${reportDate}`);
-      
-      if (attempt < retries) {
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-      }
-      
     } catch (error) {
-      console.error(`[Attempt ${attempt}/${retries}] Error fetching EOD price for ${normalizedTicker}:`, error);
-      
-      if (attempt < retries) {
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      console.error(`[EOD] Cache check error:`, error);
+    }
+
+    // Try fetching from Yahoo Finance
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const date = new Date(checkDateStr);
+        const startTimestamp = Math.floor(date.getTime() / 1000);
+        const endTimestamp = startTimestamp + 86400;
+
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${normalizedTicker}?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`;
+        
+        console.log(`[EOD] Attempt ${attempt}/${retries} for ${normalizedTicker} on ${checkDateStr} (offset: ${offset}d)`);
+        
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0'
+          }
+        });
+
+        if (!response.ok) {
+          console.error(`[EOD] Yahoo Finance API error for ${normalizedTicker}: ${response.status}`);
+          if (attempt < retries) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            continue;
+          }
+          break; // Move to next date
+        }
+
+        const data = await response.json();
+        const quotes = data?.chart?.result?.[0]?.indicators?.quote?.[0];
+        
+        if (quotes && quotes.close && quotes.close.length > 0) {
+          // Prefer adjusted close if available
+          const adjClose = data?.chart?.result?.[0]?.indicators?.adjclose?.[0]?.adjclose;
+          const closePrice = adjClose && adjClose.length > 0 
+            ? adjClose[adjClose.length - 1] 
+            : quotes.close[quotes.close.length - 1];
+          
+          if (closePrice !== null && closePrice !== undefined) {
+            const roundedPrice = Math.round(closePrice * 100) / 100;
+            
+            console.log(`[EOD] Found price for ${normalizedTicker} on ${checkDateStr}: $${roundedPrice}`);
+            
+            // Save to database cache (only cache successful lookups)
+            try {
+              await supabase
+                .from('price_cache')
+                .upsert({
+                  ticker: normalizedTicker,
+                  report_date: checkDateStr,
+                  price: roundedPrice
+                }, {
+                  onConflict: 'ticker,report_date'
+                });
+            } catch (error) {
+              console.error(`[EOD] Error saving to cache:`, error);
+            }
+            
+            return { price: roundedPrice, actualDate: checkDateStr };
+          }
+        }
+
+        console.log(`[EOD] No trading data for ${normalizedTicker} on ${checkDateStr}`);
+        break; // No data this day, try previous day
+        
+      } catch (error) {
+        console.error(`[EOD] Attempt ${attempt}/${retries} error for ${normalizedTicker} on ${checkDateStr}:`, error);
+        if (attempt < retries) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
     }
   }
 
-  // Cache null result to avoid repeated failed lookups
-  try {
-    await supabase
-      .from('price_cache')
-      .upsert({
-        ticker: normalizedTicker,
-        report_date: reportDate,
-        price: null
-      }, {
-        onConflict: 'ticker,report_date'
-      });
-  } catch (error) {
-    console.error(`Error caching null price:`, error);
-  }
-
-  return null;
+  console.log(`[EOD] No data found for ${normalizedTicker} within ${lookbackDays} days before ${reportDate}`);
+  return { price: null, actualDate: null };
 }
 
 serve(async (req) => {
@@ -295,7 +301,7 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
   }
 
   // Collect all unique tickers and dates for batch processing
-  const priceRequests: Promise<number | null>[] = [];
+  const priceRequests: Promise<{ price: number | null; actualDate: string | null }>[] = [];
   const requestMap: { [key: string]: number } = {};
   
   for (const holding of currentHoldings) {
@@ -330,13 +336,12 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
 
   // Fetch all prices in parallel
   console.log(`Fetching ${priceRequests.length} unique stock prices...`);
-  const prices = await Promise.all(priceRequests);
+  const priceResults = await Promise.all(priceRequests);
   
   // Rebuild the price cache from results
-  const priceResults: { [key: string]: number | null } = {};
-  let index = 0;
+  const priceMap: { [key: string]: { price: number | null; actualDate: string | null } } = {};
   for (const key in requestMap) {
-    priceResults[key] = prices[requestMap[key]];
+    priceMap[key] = priceResults[requestMap[key]];
   }
 
   // Now build the comparison table with cached prices
@@ -349,14 +354,16 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
     const priorQAvgPrice = priorQHolding?.shares > 0 ? priorQHolding.value_usd / priorQHolding.shares : 0;
     const priorYAvgPrice = priorYHolding?.shares > 0 ? priorYHolding.value_usd / priorYHolding.shares : 0;
 
-    // Get EOD prices from cache (null means no price data available)
+    // Get EOD prices from results (no fallback to avg price or 0)
     const currentKey = `${holding.ticker}-${currentReportDate}`;
     const priorQKey = `${priorQHolding?.ticker}-${priorQReportDate}`;
     const priorYKey = `${priorYHolding?.ticker}-${priorYReportDate}`;
 
-    const currentEodPrice = priceResults[currentKey];
-    const priorQEodPrice = priceResults[priorQKey];
-    const priorYEodPrice = priceResults[priorYKey];
+    const currentEodResult = priceMap[currentKey] || { price: null, actualDate: null };
+    const priorQEodResult = priceMap[priorQKey] || { price: null, actualDate: null };
+    const priorYEodResult = priceMap[priorYKey] || { price: null, actualDate: null };
+
+    console.log(`[DEBUG] ${holding.company_name} (${holding.ticker || 'N/A'}): EOD=${currentEodResult.price} (${currentEodResult.actualDate}), Avg=${currentAvgPrice.toFixed(2)}`);
 
     const row = {
       company: holding.company_name,
@@ -364,23 +371,26 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
       currentValue: holding.value_usd,
       currentPct: holding.percentage_of_portfolio,
       currentAvgPrice: currentAvgPrice,
-      currentEodPrice: currentEodPrice ?? 0, // Use 0 for display if no price found
+      currentEodPrice: currentEodResult.price,
+      currentEodDate: currentEodResult.actualDate,
       priorQValue: priorQHolding?.value_usd || 0,
       priorQPct: priorQHolding?.percentage_of_portfolio || 0,
       priorQAvgPrice: priorQAvgPrice,
-      priorQEodPrice: priorQEodPrice ?? 0,
+      priorQEodPrice: priorQEodResult.price,
+      priorQEodDate: priorQEodResult.actualDate,
       qoqValueChange: holding.value_usd - (priorQHolding?.value_usd || 0),
       qoqPctChange: holding.percentage_of_portfolio - (priorQHolding?.percentage_of_portfolio || 0),
       qoqAvgPriceChange: currentAvgPrice - priorQAvgPrice,
-      qoqEodPriceChange: currentEodPrice && priorQEodPrice ? currentEodPrice - priorQEodPrice : 0,
+      qoqEodPriceChange: currentEodResult.price && priorQEodResult.price ? currentEodResult.price - priorQEodResult.price : null,
       priorYValue: priorYHolding?.value_usd || 0,
       priorYPct: priorYHolding?.percentage_of_portfolio || 0,
       priorYAvgPrice: priorYAvgPrice,
-      priorYEodPrice: priorYEodPrice ?? 0,
+      priorYEodPrice: priorYEodResult.price,
+      priorYEodDate: priorYEodResult.actualDate,
       yoyValueChange: holding.value_usd - (priorYHolding?.value_usd || 0),
       yoyPctChange: holding.percentage_of_portfolio - (priorYHolding?.percentage_of_portfolio || 0),
       yoyAvgPriceChange: currentAvgPrice - priorYAvgPrice,
-      yoyEodPriceChange: currentEodPrice && priorYEodPrice ? currentEodPrice - priorYEodPrice : 0
+      yoyEodPriceChange: currentEodResult.price && priorYEodResult.price ? currentEodResult.price - priorYEodResult.price : null
     };
 
     tableData.push(row);
