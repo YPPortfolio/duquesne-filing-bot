@@ -94,18 +94,33 @@ function generateComparisonTable(current: any, priorQ: any, priorY: any) {
     const priorQHolding = priorQ?.holdings?.find((h: any) => h.cusip === holding.cusip);
     const priorYHolding = priorY?.holdings?.find((h: any) => h.cusip === holding.cusip);
 
+    // Calculate average purchase price and EOD price (value per share)
+    const currentAvgPrice = holding.shares > 0 ? holding.value_usd / holding.shares : 0;
+    const priorQAvgPrice = priorQHolding?.shares > 0 ? priorQHolding.value_usd / priorQHolding.shares : 0;
+    const priorYAvgPrice = priorYHolding?.shares > 0 ? priorYHolding.value_usd / priorYHolding.shares : 0;
+
     const row = {
       company: holding.company_name,
       currentValue: holding.value_usd,
       currentPct: holding.percentage_of_portfolio,
+      currentAvgPrice: currentAvgPrice,
+      currentEodPrice: currentAvgPrice, // Using same calculation as avg price (value/shares)
       priorQValue: priorQHolding?.value_usd || 0,
       priorQPct: priorQHolding?.percentage_of_portfolio || 0,
+      priorQAvgPrice: priorQAvgPrice,
+      priorQEodPrice: priorQAvgPrice,
       qoqValueChange: holding.value_usd - (priorQHolding?.value_usd || 0),
       qoqPctChange: holding.percentage_of_portfolio - (priorQHolding?.percentage_of_portfolio || 0),
+      qoqAvgPriceChange: currentAvgPrice - priorQAvgPrice,
+      qoqEodPriceChange: currentAvgPrice - priorQAvgPrice,
       priorYValue: priorYHolding?.value_usd || 0,
       priorYPct: priorYHolding?.percentage_of_portfolio || 0,
+      priorYAvgPrice: priorYAvgPrice,
+      priorYEodPrice: priorYAvgPrice,
       yoyValueChange: holding.value_usd - (priorYHolding?.value_usd || 0),
-      yoyPctChange: holding.percentage_of_portfolio - (priorYHolding?.percentage_of_portfolio || 0)
+      yoyPctChange: holding.percentage_of_portfolio - (priorYHolding?.percentage_of_portfolio || 0),
+      yoyAvgPriceChange: currentAvgPrice - priorYAvgPrice,
+      yoyEodPriceChange: currentAvgPrice - priorYAvgPrice
     };
 
     tableData.push(row);

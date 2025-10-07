@@ -22,6 +22,15 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
     }).format(value);
   };
 
+  const formatPrice = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  };
+
   const formatPercent = (value: number) => {
     const sign = value >= 0 ? '+' : '';
     return `${sign}${value.toFixed(2)}%`;
@@ -53,14 +62,20 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
               <TableHead className="font-semibold">Company</TableHead>
               <TableHead className="text-right font-semibold">Current ($)</TableHead>
               <TableHead className="text-right font-semibold">Current (%)</TableHead>
+              <TableHead className="text-right font-semibold">Avg Price</TableHead>
+              <TableHead className="text-right font-semibold">EOD Price</TableHead>
               <TableHead className="text-right font-semibold">Prior Q ($)</TableHead>
               <TableHead className="text-right font-semibold">Prior Q (%)</TableHead>
+              <TableHead className="text-right font-semibold">Prior Q Avg</TableHead>
               <TableHead className="text-right font-semibold">QoQ Δ ($)</TableHead>
               <TableHead className="text-right font-semibold">QoQ Δ (%)</TableHead>
+              <TableHead className="text-right font-semibold">QoQ Δ Avg</TableHead>
               <TableHead className="text-right font-semibold">Prior Y ($)</TableHead>
               <TableHead className="text-right font-semibold">Prior Y (%)</TableHead>
+              <TableHead className="text-right font-semibold">Prior Y Avg</TableHead>
               <TableHead className="text-right font-semibold">YoY Δ ($)</TableHead>
               <TableHead className="text-right font-semibold">YoY Δ (%)</TableHead>
+              <TableHead className="text-right font-semibold">YoY Δ Avg</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -69,21 +84,31 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
                 <TableCell className="font-medium">{row.company}</TableCell>
                 <TableCell className="text-right">{formatCurrency(row.currentValue)}</TableCell>
                 <TableCell className="text-right">{row.currentPct.toFixed(2)}%</TableCell>
+                <TableCell className="text-right">{formatPrice(row.currentAvgPrice)}</TableCell>
+                <TableCell className="text-right">{formatPrice(row.currentEodPrice)}</TableCell>
                 <TableCell className="text-right text-muted-foreground">{formatCurrency(row.priorQValue)}</TableCell>
                 <TableCell className="text-right text-muted-foreground">{row.priorQPct.toFixed(2)}%</TableCell>
+                <TableCell className="text-right text-muted-foreground">{formatPrice(row.priorQAvgPrice)}</TableCell>
                 <TableCell className={`text-right font-semibold ${getChangeColor(row.qoqValueChange)}`}>
                   {getChangeIcon(row.qoqValueChange)} {formatCurrency(row.qoqValueChange)}
                 </TableCell>
                 <TableCell className={`text-right font-semibold ${getChangeColor(row.qoqPctChange)}`}>
                   {formatPercent(row.qoqPctChange)}
                 </TableCell>
+                <TableCell className={`text-right font-semibold ${getChangeColor(row.qoqAvgPriceChange)}`}>
+                  {getChangeIcon(row.qoqAvgPriceChange)} {formatPrice(Math.abs(row.qoqAvgPriceChange))}
+                </TableCell>
                 <TableCell className="text-right text-muted-foreground">{formatCurrency(row.priorYValue)}</TableCell>
                 <TableCell className="text-right text-muted-foreground">{row.priorYPct.toFixed(2)}%</TableCell>
+                <TableCell className="text-right text-muted-foreground">{formatPrice(row.priorYAvgPrice)}</TableCell>
                 <TableCell className={`text-right font-semibold ${getChangeColor(row.yoyValueChange)}`}>
                   {getChangeIcon(row.yoyValueChange)} {formatCurrency(row.yoyValueChange)}
                 </TableCell>
                 <TableCell className={`text-right font-semibold ${getChangeColor(row.yoyPctChange)}`}>
                   {formatPercent(row.yoyPctChange)}
+                </TableCell>
+                <TableCell className={`text-right font-semibold ${getChangeColor(row.yoyAvgPriceChange)}`}>
+                  {getChangeIcon(row.yoyAvgPriceChange)} {formatPrice(Math.abs(row.yoyAvgPriceChange))}
                 </TableCell>
               </TableRow>
             ))}
