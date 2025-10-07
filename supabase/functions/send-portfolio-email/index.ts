@@ -65,11 +65,16 @@ serve(async (req) => {
 
     console.log("Sending email to:", recipient);
     
+    // Clean up HTML: remove trailing spaces and normalize whitespace to avoid encoding issues
+    const cleanHtml = htmlContent
+      .replace(/\s+$/gm, '') // Remove trailing spaces on each line
+      .replace(/\n{3,}/g, '\n\n'); // Collapse multiple newlines
+    
     await client.send({
       from: `Duquesne Filing Bot <${emailUser}>`,
       to: recipient,
       subject: `Duquesne Family Office - ${reportData.currentFiling.quarter} ${reportData.currentFiling.year} Portfolio Update`,
-      html: htmlContent,
+      html: cleanHtml,
       content: 'text/html'
     });
 
@@ -138,7 +143,7 @@ function generateEmailHTML(reportData: any): string {
   const { currentFiling, comparisonData, summary } = reportData;
   
   const formatCurrency = (value: number) => 
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(value);
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
   
   const formatPercent = (value: number) => 
     `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
@@ -198,21 +203,8 @@ function generateEmailHTML(reportData: any): string {
     const yoyValueClass = holding.yoyValueChange >= 0 ? 'positive' : 'negative';
     const yoyPctClass = holding.yoyPctChange >= 0 ? 'positive' : 'negative';
     
-    tableRows += `
-      <tr>
-        <td class="company">${holding.company}</td>
-        <td class="right">${formatCurrency(holding.currentValue)}</td>
-        <td class="right">${holding.currentPct.toFixed(2)}%</td>
-        <td class="right">${formatCurrency(holding.priorQValue)}</td>
-        <td class="right">${holding.priorQPct.toFixed(2)}%</td>
-        <td class="right ${qoqValueClass}">${formatCurrency(holding.qoqValueChange)}</td>
-        <td class="right ${qoqPctClass}">${formatPercent(holding.qoqPctChange)}</td>
-        <td class="right">${formatCurrency(holding.priorYValue)}</td>
-        <td class="right">${holding.priorYPct.toFixed(2)}%</td>
-        <td class="right ${yoyValueClass}">${formatCurrency(holding.yoyValueChange)}</td>
-        <td class="right ${yoyPctClass}">${formatPercent(holding.yoyPctChange)}</td>
-      </tr>
-    `;
+    // Compact HTML without extra whitespace to avoid encoding issues
+    tableRows += `<tr><td class="company">${holding.company}</td><td class="right">${formatCurrency(holding.currentValue)}</td><td class="right">${holding.currentPct.toFixed(2)}%</td><td class="right">${formatCurrency(holding.priorQValue)}</td><td class="right">${holding.priorQPct.toFixed(2)}%</td><td class="right ${qoqValueClass}">${formatCurrency(holding.qoqValueChange)}</td><td class="right ${qoqPctClass}">${formatPercent(holding.qoqPctChange)}</td><td class="right">${formatCurrency(holding.priorYValue)}</td><td class="right">${holding.priorYPct.toFixed(2)}%</td><td class="right ${yoyValueClass}">${formatCurrency(holding.yoyValueChange)}</td><td class="right ${yoyPctClass}">${formatPercent(holding.yoyPctChange)}</td></tr>`;
   }
 
   return `
