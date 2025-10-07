@@ -6,6 +6,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Price cache to avoid duplicate API calls
+const priceCache: { [key: string]: number } = {};
+
 // Helper function to get quarter-end reporting date
 function getQuarterEndDate(quarter: string, year: number): string {
   const quarterEndDates: { [key: string]: string } = {
@@ -17,11 +20,18 @@ function getQuarterEndDate(quarter: string, year: number): string {
   return quarterEndDates[quarter] || `${year}-12-31`;
 }
 
-// Helper function to fetch EOD price from Yahoo Finance
+// Helper function to fetch EOD price from Yahoo Finance with caching
 async function getEodPrice(ticker: string | null, reportDate: string): Promise<number> {
   if (!ticker) {
     console.log('No ticker provided, skipping EOD price fetch');
     return 0;
+  }
+
+  // Check cache first
+  const cacheKey = `${ticker}-${reportDate}`;
+  if (priceCache[cacheKey] !== undefined) {
+    console.log(`Using cached price for ${ticker} on ${reportDate}: $${priceCache[cacheKey]}`);
+    return priceCache[cacheKey];
   }
 
   try {
@@ -42,6 +52,7 @@ async function getEodPrice(ticker: string | null, reportDate: string): Promise<n
 
     if (!response.ok) {
       console.error(`Yahoo Finance API error for ${ticker}: ${response.status}`);
+      priceCache[cacheKey] = 0;
       return 0;
     }
 
@@ -51,13 +62,16 @@ async function getEodPrice(ticker: string | null, reportDate: string): Promise<n
     if (quotes && quotes.close && quotes.close.length > 0) {
       const closePrice = quotes.close[quotes.close.length - 1];
       console.log(`EOD price for ${ticker}: $${closePrice}`);
+      priceCache[cacheKey] = closePrice || 0;
       return closePrice || 0;
     }
 
     console.log(`No price data found for ${ticker} on ${reportDate}`);
+    priceCache[cacheKey] = 0;
     return 0;
   } catch (error) {
     console.error(`Error fetching EOD price for ${ticker}:`, error);
+    priceCache[cacheKey] = 0;
     return 0;
   }
 }
@@ -153,6 +167,52 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any) {
 
   console.log(`Report dates - Current: ${currentReportDate}, Prior Q: ${priorQReportDate}, Prior Y: ${priorYReportDate}`);
 
+  // Collect all unique tickers and dates for batch processing
+  const priceRequests: Promise<number>[] = [];
+  const requestMap: { [key: string]: number } = {};
+  
+  for (const holding of currentHoldings) {
+    const priorQHolding = priorQ?.holdings?.find((h: any) => h.cusip === holding.cusip);
+    const priorYHolding = priorY?.holdings?.find((h: any) => h.cusip === holding.cusip);
+
+    // Queue up all price requests
+    if (holding.ticker) {
+      const currentKey = `${holding.ticker}-${currentReportDate}`;
+      if (!(currentKey in requestMap)) {
+        requestMap[currentKey] = priceRequests.length;
+        priceRequests.push(getEodPrice(holding.ticker, currentReportDate));
+      }
+    }
+
+    if (priorQHolding?.ticker && priorQReportDate) {
+      const priorQKey = `${priorQHolding.ticker}-${priorQReportDate}`;
+      if (!(priorQKey in requestMap)) {
+        requestMap[priorQKey] = priceRequests.length;
+        priceRequests.push(getEodPrice(priorQHolding.ticker, priorQReportDate));
+      }
+    }
+
+    if (priorYHolding?.ticker && priorYReportDate) {
+      const priorYKey = `${priorYHolding.ticker}-${priorYReportDate}`;
+      if (!(priorYKey in requestMap)) {
+        requestMap[priorYKey] = priceRequests.length;
+        priceRequests.push(getEodPrice(priorYHolding.ticker, priorYReportDate));
+      }
+    }
+  }
+
+  // Fetch all prices in parallel
+  console.log(`Fetching ${priceRequests.length} unique stock prices...`);
+  const prices = await Promise.all(priceRequests);
+  
+  // Rebuild the price cache from results
+  const priceResults: { [key: string]: number } = {};
+  let index = 0;
+  for (const key in requestMap) {
+    priceResults[key] = prices[requestMap[key]];
+  }
+
+  // Now build the comparison table with cached prices
   for (const holding of currentHoldings) {
     const priorQHolding = priorQ?.holdings?.find((h: any) => h.cusip === holding.cusip);
     const priorYHolding = priorY?.holdings?.find((h: any) => h.cusip === holding.cusip);
@@ -162,10 +222,14 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any) {
     const priorQAvgPrice = priorQHolding?.shares > 0 ? priorQHolding.value_usd / priorQHolding.shares : 0;
     const priorYAvgPrice = priorYHolding?.shares > 0 ? priorYHolding.value_usd / priorYHolding.shares : 0;
 
-    // Fetch real EOD prices from Yahoo Finance
-    const currentEodPrice = await getEodPrice(holding.ticker, currentReportDate);
-    const priorQEodPrice = priorQReportDate && priorQHolding ? await getEodPrice(priorQHolding.ticker, priorQReportDate) : 0;
-    const priorYEodPrice = priorYReportDate && priorYHolding ? await getEodPrice(priorYHolding.ticker, priorYReportDate) : 0;
+    // Get EOD prices from cache
+    const currentKey = `${holding.ticker}-${currentReportDate}`;
+    const priorQKey = `${priorQHolding?.ticker}-${priorQReportDate}`;
+    const priorYKey = `${priorYHolding?.ticker}-${priorYReportDate}`;
+
+    const currentEodPrice = priceResults[currentKey] || 0;
+    const priorQEodPrice = priceResults[priorQKey] || 0;
+    const priorYEodPrice = priceResults[priorYKey] || 0;
 
     const row = {
       company: holding.company_name,
@@ -194,6 +258,8 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any) {
     tableData.push(row);
   }
 
+  console.log(`Generated comparison data for ${tableData.length} holdings`);
+  
   // Sort by current value descending
   return tableData.sort((a, b) => b.currentValue - a.currentValue);
 }
