@@ -126,6 +126,30 @@ export type Database = {
           },
         ]
       }
+      price_cache: {
+        Row: {
+          created_at: string
+          id: string
+          price: number | null
+          report_date: string
+          ticker: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          price?: number | null
+          report_date: string
+          ticker: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          price?: number | null
+          report_date?: string
+          ticker?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
