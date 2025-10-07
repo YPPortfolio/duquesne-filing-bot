@@ -130,6 +130,12 @@ async function generateAISummary(comparisonData: any[], filing: any): Promise<st
 Portfolio Data:
 ${JSON.stringify(comparisonData.slice(0, 15), null, 2)}
 
+IMPORTANT FORMATTING RULES:
+- ALL dollar amounts MUST include the "$" symbol (e.g., "$132.7M", "$99.9M", "+$122.3M", "-$81.0M")
+- Use consistent formatting: "$" + value + "M" or "B" for millions/billions
+- Include "$" even for positive and negative changes (e.g., "+$50M", "-$25M")
+- Never write amounts without the "$" symbol (e.g., "+122.3M" is WRONG, must be "+$122.3M")
+
 Keep the summary professional, data-driven, and under 200 words.`;
 
   try {
@@ -154,7 +160,17 @@ Keep the summary professional, data-driven, and under 200 words.`;
     }
 
     const data = await response.json();
-    return data.choices[0]?.message?.content || "AI summary unavailable";
+    let summary = data.choices[0]?.message?.content || "AI summary unavailable";
+    
+    // Post-process to ensure all dollar amounts have "$" symbol
+    // Fix patterns like (+123.4M) or (-123.4M) or (123.4M) to include $
+    summary = summary.replace(/\(([+-]?)(\d+\.?\d*[MB])\)/g, '($1$$$2)');
+    // Fix patterns like +123.4M or -123.4M that are missing $
+    summary = summary.replace(/([+-])(\d+\.?\d*[MB])\b/g, '$1$$$2');
+    // Fix standalone amounts like 123.4M that are missing $ (but not if already has $)
+    summary = summary.replace(/\b(?<!\$)(\d+\.?\d*[MB])\b/g, '$$$1');
+    
+    return summary;
   } catch (error) {
     console.error('Error generating AI summary:', error);
     return "AI summary unavailable";
