@@ -14,6 +14,8 @@ serve(async (req) => {
   }
 
   try {
+    console.log("=== Starting fetch-13f-filing function ===");
+    
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -23,6 +25,8 @@ serve(async (req) => {
 
     // Fetch submissions from SEC EDGAR
     const submissionsUrl = `https://data.sec.gov/submissions/CIK${DUQUESNE_CIK.padStart(10, '0')}.json`;
+    console.log("Fetching submissions from:", submissionsUrl);
+    
     const submissionsResponse = await fetch(submissionsUrl, {
       headers: {
         'User-Agent': 'Portfolio Tracker peacenlov32@gmail.com',
@@ -30,8 +34,12 @@ serve(async (req) => {
       }
     });
 
+    console.log("SEC API response status:", submissionsResponse.status);
+
     if (!submissionsResponse.ok) {
-      throw new Error(`SEC API error: ${submissionsResponse.status}`);
+      const errorText = await submissionsResponse.text();
+      console.error("SEC API error response:", errorText);
+      throw new Error(`SEC API error: ${submissionsResponse.status} - ${errorText}`);
     }
 
     const submissionsData = await submissionsResponse.json();
@@ -183,19 +191,31 @@ serve(async (req) => {
       }
     }
 
+    console.log(`=== Function completed successfully. Processed ${processedFilings.length} filing(s) ===`);
+    
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: `Processed ${processedFilings.length} new filing(s)`,
         filings: processedFilings
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
     );
 
   } catch (error) {
-    console.error('Error in fetch-13f-filing:', error);
+    console.error('=== Error in fetch-13f-filing ===');
+    console.error('Error type:', error?.constructor?.name);
+    console.error('Error message:', error instanceof Error ? error.message : String(error));
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        details: error instanceof Error ? error.stack : String(error)
+      }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

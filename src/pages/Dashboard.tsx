@@ -86,11 +86,18 @@ export default function Dashboard() {
   const fetchNewFilings = async () => {
     setIsFetchingNew(true);
     try {
+      console.log("Calling fetch-13f-filing edge function...");
+      
       const { data, error } = await supabase.functions.invoke('fetch-13f-filing', {
-        headers: { 'cache-control': 'no-cache' },
+        body: {}
       });
       
-      if (error) throw error;
+      console.log("Edge function response:", { data, error });
+      
+      if (error) {
+        console.error("Edge function error:", error);
+        throw new Error(error.message || "Failed to fetch filings from edge function");
+      }
       
       toast({
         title: "Success",
@@ -107,9 +114,10 @@ export default function Dashboard() {
         setReportData(null);
       }
     } catch (error: any) {
+      console.error("Fetch filings error:", error);
       toast({
         title: "Error fetching filings",
-        description: error.message,
+        description: error.message || "Failed to send a request to the Edge Function",
         variant: "destructive"
       });
     } finally {
