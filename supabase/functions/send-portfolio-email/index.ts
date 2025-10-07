@@ -148,24 +148,45 @@ function generateEmailHTML(reportData: any): string {
 
   // Format summary with proper paragraph breaks for better Gmail readability
   const formatSummary = (text: string) => {
-    return text
-      .split('**')
-      .map((part, index) => {
-        // Bold the sections between ** markers
-        if (index % 2 === 1) {
-          return `<strong>${part}</strong>`;
-        }
-        return part;
-      })
-      .join('')
-      .split('. ')
-      .map(sentence => sentence.trim())
-      .filter(sentence => sentence.length > 0)
-      .map(sentence => sentence.endsWith('.') ? sentence : sentence + '.')
-      .join(' ')
+    // Convert markdown to clean HTML
+    let formatted = text
+      // Remove any leading/trailing whitespace
+      .trim()
+      // Convert ### headers to h3
+      .replace(/###\s+([^\n]+)/g, '<h3 style="font-family:Arial,sans-serif; font-size:15px; font-weight:bold; color:#1a1a1a; margin:16px 0 8px 0;">$1</h3>')
+      // Convert ## headers to h2
+      .replace(/##\s+([^\n]+)/g, '<h2 style="font-family:Arial,sans-serif; font-size:16px; font-weight:bold; color:#1a1a1a; margin:20px 0 10px 0;">$1</h2>')
+      // Convert # headers to h2 (treating as section headers)
+      .replace(/#\s+([^\n]+)/g, '<h2 style="font-family:Arial,sans-serif; font-size:16px; font-weight:bold; color:#1a1a1a; margin:20px 0 10px 0;">$1</h2>')
+      // Convert **bold** to <strong>
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/(\d+\.\s)/g, '<br><br>$1')
-      .replace(/(Quarter-over-Quarter Changes:|Year-over-Year Trends:|Concentration and Diversification:)/g, '<br><br><strong>$1</strong><br>');
+      // Convert *italic* to <em>
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      // Convert _italic_ to <em>
+      .replace(/_([^_]+)_/g, '<em>$1</em>')
+      // Convert bullet points - * or -
+      .replace(/^\s*[-*]\s+(.+)$/gm, '<li style="margin:4px 0;">$1</li>')
+      // Convert numbered lists
+      .replace(/^\s*(\d+)\.\s+(.+)$/gm, '<li style="margin:4px 0;">$2</li>');
+    
+    // Wrap consecutive <li> tags in <ul>
+    formatted = formatted.replace(/(<li[^>]*>.*?<\/li>\s*)+/gs, (match) => {
+      return `<ul style="margin:8px 0; padding-left:20px; font-family:Arial,sans-serif; font-size:14px; color:#333;">${match}</ul>`;
+    });
+    
+    // Split into paragraphs and wrap each in <p> tags (but not if already wrapped in a tag)
+    const lines = formatted.split('\n\n');
+    formatted = lines.map(line => {
+      line = line.trim();
+      if (!line) return '';
+      // Don't wrap if already has HTML tags
+      if (line.startsWith('<h') || line.startsWith('<ul') || line.startsWith('<li')) {
+        return line;
+      }
+      return `<p style="font-family:Arial,sans-serif; font-size:14px; color:#333; line-height:1.6; margin:0 0 12px 0;">${line}</p>`;
+    }).join('\n');
+    
+    return formatted;
   };
 
   const topHoldings = comparisonData.slice(0, 15);
@@ -231,9 +252,11 @@ function generateEmailHTML(reportData: any): string {
       <p>${currentFiling.quarter} ${currentFiling.year} Portfolio Update</p>
     </div>
 
-    <div class="summary">
-      <h2>Executive Summary</h2>
-      <div class="summary-text">${formatSummary(summary)}</div>
+    <div style="background:#ffffff; padding:24px; border-radius:8px; margin-bottom:20px; border-left:4px solid #3B82F6;">
+      <h2 style="margin:0 0 16px 0; font-size:18px; font-weight:bold; color:#1a1a1a; font-family:Arial,sans-serif;">Executive Summary</h2>
+      <div style="color:#333; line-height:1.7;">
+        ${formatSummary(summary)}
+      </div>
     </div>
 
     <div class="table-container">
