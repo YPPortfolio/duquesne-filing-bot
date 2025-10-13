@@ -22,7 +22,8 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
     }).format(value);
   };
 
-  const formatPrice = (value: number) => {
+  const formatPrice = (value: number | null) => {
+    if (value === null || value === undefined) return '—';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -103,8 +104,10 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
                 <TableCell className={`text-right font-semibold ${getChangeColor(row.qoqAvgPriceChange)}`}>
                   {getChangeIcon(row.qoqAvgPriceChange)} {formatPrice(Math.abs(row.qoqAvgPriceChange))}
                 </TableCell>
-                <TableCell className={`text-right font-semibold ${getChangeColor(row.qoqEodPriceChange)}`}>
-                  {getChangeIcon(row.qoqEodPriceChange)} {formatPrice(Math.abs(row.qoqEodPriceChange))}
+                <TableCell className={`text-right font-semibold ${row.qoqEodPriceChange !== null ? getChangeColor(row.qoqEodPriceChange) : ''}`}>
+                  {row.qoqEodPriceChange !== null ? (
+                    <>{getChangeIcon(row.qoqEodPriceChange)} {formatPrice(Math.abs(row.qoqEodPriceChange))}</>
+                  ) : '—'}
                 </TableCell>
                 <TableCell className="text-right text-muted-foreground">{formatCurrency(row.priorYValue)}</TableCell>
                 <TableCell className="text-right text-muted-foreground">{row.priorYPct.toFixed(2)}%</TableCell>
@@ -119,8 +122,10 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
                 <TableCell className={`text-right font-semibold ${getChangeColor(row.yoyAvgPriceChange)}`}>
                   {getChangeIcon(row.yoyAvgPriceChange)} {formatPrice(Math.abs(row.yoyAvgPriceChange))}
                 </TableCell>
-                <TableCell className={`text-right font-semibold ${getChangeColor(row.yoyEodPriceChange)}`}>
-                  {getChangeIcon(row.yoyEodPriceChange)} {formatPrice(Math.abs(row.yoyEodPriceChange))}
+                <TableCell className={`text-right font-semibold ${row.yoyEodPriceChange !== null ? getChangeColor(row.yoyEodPriceChange) : ''}`}>
+                  {row.yoyEodPriceChange !== null ? (
+                    <>{getChangeIcon(row.yoyEodPriceChange)} {formatPrice(Math.abs(row.yoyEodPriceChange))}</>
+                  ) : '—'}
                 </TableCell>
               </TableRow>
             ))}

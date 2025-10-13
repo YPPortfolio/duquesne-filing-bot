@@ -15,46 +15,63 @@ function normalizeTicker(ticker: string): string {
   return normalized;
 }
 
-// Helper function to convert CUSIP to ticker via OpenFIGI API
-async function cusipToTicker(cusip: string): Promise<string | null> {
-  if (!cusip) return null;
+// Helper function to calculate string similarity for ticker matching
+function similarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  const ta = a.toLowerCase().replace(/[^\w\s]/g, "").split(/\s+/);
+  const tb = b.toLowerCase().replace(/[^\w\s]/g, "").split(/\s+/);
+  const aset = new Set(ta);
+  const bset = new Set(tb);
+  const inter = [...aset].filter(x => bset.has(x)).length;
+  const union = new Set([...ta, ...tb]).size || 1;
+  return inter / union;
+}
 
+// Helper function to find ticker by company name via Yahoo Finance search
+async function findTickerByName(issuerName: string): Promise<{ ticker: string | null; score: number; source: string; name?: string }> {
+  if (!issuerName) return { ticker: null, score: 0, source: "none" };
+  
+  const q = encodeURIComponent(issuerName);
+  const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${q}&quotesCount=10&newsCount=0`;
+  
   try {
-    console.log(`Attempting to map CUSIP ${cusip} to ticker via OpenFIGI`);
-    
-    const response = await fetch('https://api.openfigi.com/v3/mapping', {
-      method: 'POST',
+    console.log(`[Yahoo Search] Looking up ticker for: ${issuerName}`);
+    const res = await fetch(url, {
       headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify([{
-        idType: 'ID_CUSIP',
-        idValue: cusip
-      }])
+        'User-Agent': 'Mozilla/5.0'
+      }
     });
-
-    if (!response.ok) {
-      console.error(`OpenFIGI API error for CUSIP ${cusip}: ${response.status}`);
-      return null;
-    }
-
-    const data = await response.json();
     
-    if (Array.isArray(data) && data.length > 0) {
-      const mapping = data[0]?.data?.[0];
-      const ticker = mapping?.ticker;
-      
-      if (ticker) {
-        console.log(`Mapped CUSIP ${cusip} to ticker ${ticker}`);
-        return ticker;
+    if (!res.ok) {
+      console.error(`[Yahoo Search] API error for ${issuerName}: ${res.status}`);
+      return { ticker: null, score: 0, source: "yahoo:err" };
+    }
+    
+    const json = await res.json();
+    const quotes = Array.isArray(json.quotes) ? json.quotes : [];
+    
+    let best = { ticker: null as string | null, score: 0, name: "" };
+    for (const q of quotes) {
+      const candName = q.longname || q.shortname || q.name || "";
+      const candTicker = q.symbol || null;
+      const s = similarity(issuerName, candName || candTicker || "");
+      const booster = issuerName.toUpperCase().includes((candTicker || "").toUpperCase()) ? 0.15 : 0;
+      const score = Math.min(1, s + booster);
+      if (score > best.score) {
+        best = { ticker: candTicker, score, name: candName };
       }
     }
-
-    console.log(`No ticker found for CUSIP ${cusip}`);
-    return null;
-  } catch (error) {
-    console.error(`Error mapping CUSIP ${cusip}:`, error);
-    return null;
+    
+    if (best.score >= 0.65) {
+      console.log(`[Yahoo Search] Found ticker ${best.ticker} for ${issuerName} (score: ${best.score.toFixed(2)})`);
+      return { ticker: best.ticker, score: best.score, source: "yahoo", name: best.name };
+    } else {
+      console.log(`[Yahoo Search] No good match for ${issuerName} (best score: ${best.score.toFixed(2)})`);
+      return { ticker: null, score: best.score, source: "yahoo", name: best.name };
+    }
+  } catch (err) {
+    console.error(`[Yahoo Search] Exception for ${issuerName}:`, err);
+    return { ticker: null, score: 0, source: "yahoo:exception" };
   }
 }
 
@@ -69,29 +86,28 @@ function getQuarterEndDate(quarter: string, year: number): string {
   return quarterEndDates[quarter] || `${year}-12-31`;
 }
 
-// Helper function to fetch EOD price with lookback and fallback to average price
+// Helper function to fetch EOD price (no average price fallback)
 async function getEodPrice(
   supabase: any,
   ticker: string | null,
-  reportDate: string,
-  averagePrice: number = 0
+  reportDate: string
 ): Promise<{ price: number | null; actualDate: string | null }> {
   if (!ticker) {
-    console.log('[EOD] No ticker provided, using average price');
-    return { price: averagePrice || null, actualDate: null };
+    console.log('[EOD] No ticker provided');
+    return { price: null, actualDate: null };
   }
 
   const normalizedTicker = normalizeTicker(ticker);
   if (!normalizedTicker) {
-    console.log('[EOD] Ticker normalization failed, using average price');
-    return { price: averagePrice || null, actualDate: null };
+    console.log('[EOD] Ticker normalization failed');
+    return { price: null, actualDate: null };
   }
 
   // Check database cache first
   try {
     const { data: cachedPrice } = await supabase
       .from('price_cache')
-      .select('price')
+      .select('price, report_date')
       .eq('ticker', normalizedTicker)
       .eq('report_date', reportDate)
       .maybeSingle();
@@ -104,112 +120,80 @@ async function getEodPrice(
     console.error(`[EOD] Cache check error:`, error);
   }
 
-  // Try fetching with -3 to +1 day range first
+  // Step backward from reportDate to find the last trading day (max 7 days)
   const anchorDate = new Date(reportDate);
-  const startDate = new Date(anchorDate);
-  startDate.setDate(startDate.getDate() - 3);
-  const endDate = new Date(anchorDate);
-  endDate.setDate(endDate.getDate() + 1);
+  const reportDateTs = Math.floor(anchorDate.getTime() / 1000);
 
-  const period1 = Math.floor(startDate.getTime() / 1000);
-  const period2 = Math.floor(endDate.getTime() / 1000);
+  for (let lookback = 0; lookback <= 7; lookback++) {
+    const searchDate = new Date(anchorDate);
+    searchDate.setDate(searchDate.getDate() - lookback);
+    
+    const period1 = Math.floor(searchDate.getTime() / 1000);
+    const period2 = Math.floor((searchDate.getTime() / 1000) + 86400); // +1 day
 
-  try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${normalizedTicker}?period1=${period1}&period2=${period2}&interval=1d`;
-    
-    console.log(`[EOD] Fetching ${normalizedTicker} from ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
-    
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0'
+    try {
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${normalizedTicker}?period1=${period1}&period2=${period2}&interval=1d`;
+      
+      console.log(`[EOD] Fetching ${normalizedTicker} for ${searchDate.toISOString().split('T')[0]} (lookback: ${lookback})`);
+      
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0'
+        }
+      });
+
+      if (!response.ok) {
+        console.error(`[EOD] Yahoo Finance API error for ${normalizedTicker}: ${response.status}`);
+        continue;
       }
-    });
 
-    if (!response.ok) {
-      console.error(`[EOD] Yahoo Finance API error for ${normalizedTicker}: ${response.status}`);
-      throw new Error(`API returned ${response.status}`);
-    }
-
-    const data = await response.json();
-    const close = data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close?.pop() ?? null;
-    
-    if (close !== null && close !== undefined && !isNaN(close)) {
-      const roundedPrice = Math.round(close * 100) / 100;
+      const data = await response.json();
+      const timestamps = data?.chart?.result?.[0]?.timestamp || [];
+      const closes = data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || [];
       
-      console.log(`[EOD] Found price for ${normalizedTicker}: $${roundedPrice}`);
+      // Filter bars that are <= reportDate and find the latest
+      let latestPrice = null;
+      let latestDate = null;
       
-      // Save to database cache
-      try {
-        await supabase
-          .from('price_cache')
-          .upsert({
-            ticker: normalizedTicker,
-            report_date: reportDate,
-            price: roundedPrice
-          }, {
-            onConflict: 'ticker,report_date'
-          });
-      } catch (error) {
-        console.error(`[EOD] Error saving to cache:`, error);
+      for (let i = 0; i < timestamps.length; i++) {
+        const barTs = timestamps[i];
+        const barClose = closes[i];
+        
+        if (barTs <= reportDateTs && barClose !== null && !isNaN(barClose)) {
+          latestPrice = barClose;
+          latestDate = new Date(barTs * 1000).toISOString().split('T')[0];
+        }
       }
       
-      return { price: roundedPrice, actualDate: reportDate };
-    }
-
-    console.log(`[EOD] No close price in response, retrying with -7 days`);
-    
-    // Retry with -7 days
-    const retryStartDate = new Date(anchorDate);
-    retryStartDate.setDate(retryStartDate.getDate() - 7);
-    const retryPeriod1 = Math.floor(retryStartDate.getTime() / 1000);
-
-    const retryUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${normalizedTicker}?period1=${retryPeriod1}&period2=${period2}&interval=1d`;
-    
-    console.log(`[EOD] Retry: Fetching ${normalizedTicker} from ${retryStartDate.toISOString().split('T')[0]}`);
-    
-    const retryResponse = await fetch(retryUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0'
+      if (latestPrice !== null) {
+        const roundedPrice = Math.round(latestPrice * 100) / 100;
+        
+        console.log(`[EOD] Found price for ${normalizedTicker}: $${roundedPrice} on ${latestDate}`);
+        
+        // Save to database cache (only successful lookups)
+        try {
+          await supabase
+            .from('price_cache')
+            .upsert({
+              ticker: normalizedTicker,
+              report_date: reportDate,
+              price: roundedPrice
+            }, {
+              onConflict: 'ticker,report_date'
+            });
+        } catch (error) {
+          console.error(`[EOD] Error saving to cache:`, error);
+        }
+        
+        return { price: roundedPrice, actualDate: latestDate };
       }
-    });
-
-    if (!retryResponse.ok) {
-      console.error(`[EOD] Retry failed for ${normalizedTicker}: ${retryResponse.status}`);
-      throw new Error(`Retry API returned ${retryResponse.status}`);
+    } catch (error) {
+      console.error(`[EOD] Error fetching ${normalizedTicker} for lookback ${lookback}:`, error);
     }
-
-    const retryData = await retryResponse.json();
-    const retryClose = retryData?.chart?.result?.[0]?.indicators?.quote?.[0]?.close?.pop() ?? null;
-    
-    if (retryClose !== null && retryClose !== undefined && !isNaN(retryClose)) {
-      const roundedPrice = Math.round(retryClose * 100) / 100;
-      
-      console.log(`[EOD] Found price on retry for ${normalizedTicker}: $${roundedPrice}`);
-      
-      // Save to database cache
-      try {
-        await supabase
-          .from('price_cache')
-          .upsert({
-            ticker: normalizedTicker,
-            report_date: reportDate,
-            price: roundedPrice
-          }, {
-            onConflict: 'ticker,report_date'
-          });
-      } catch (error) {
-        console.error(`[EOD] Error saving to cache:`, error);
-      }
-      
-      return { price: roundedPrice, actualDate: reportDate };
-    }
-
-  } catch (error) {
-    console.error(`[EOD] EOD fetch failed for ${normalizedTicker}:`, error);
   }
 
-  console.log(`[EOD] Using average price fallback for ${normalizedTicker}: $${averagePrice}`);
-  return { price: averagePrice || null, actualDate: null };
+  console.log(`[EOD] No EOD price found for ${normalizedTicker} within 7 days of ${reportDate}`);
+  return { price: null, actualDate: null };
 }
 
 serve(async (req) => {
@@ -304,14 +288,17 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
 
   console.log(`Report dates - Current: ${currentReportDate}, Prior Q: ${priorQReportDate}, Prior Y: ${priorYReportDate}`);
 
-  // First pass: resolve tickers from CUSIPs if needed
+  // First pass: resolve tickers from company names using Yahoo Finance search
   const tickerResolutionPromises = [];
   for (const holding of currentHoldings) {
-    if (!holding.ticker && holding.cusip) {
+    if (!holding.ticker && holding.company_name) {
       tickerResolutionPromises.push(
-        cusipToTicker(holding.cusip).then(ticker => {
-          if (ticker) {
-            holding.ticker = ticker;
+        findTickerByName(holding.company_name).then(result => {
+          if (result.ticker) {
+            holding.ticker = result.ticker;
+            console.log(`[Ticker] Mapped "${holding.company_name}" -> ${result.ticker}`);
+          } else {
+            console.log(`[Ticker] No ticker found for "${holding.company_name}"`);
           }
         })
       );
@@ -319,7 +306,7 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
   }
 
   if (tickerResolutionPromises.length > 0) {
-    console.log(`Resolving ${tickerResolutionPromises.length} CUSIP-to-ticker mappings...`);
+    console.log(`Resolving ${tickerResolutionPromises.length} company-to-ticker mappings via Yahoo...`);
     await Promise.all(tickerResolutionPromises);
   }
 
@@ -331,17 +318,12 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
     const priorQHolding = priorQ?.holdings?.find((h: any) => h.cusip === holding.cusip);
     const priorYHolding = priorY?.holdings?.find((h: any) => h.cusip === holding.cusip);
 
-    // Calculate average prices for fallback
-    const currentAvgPrice = holding.shares > 0 ? holding.value_usd / holding.shares : 0;
-    const priorQAvgPrice = priorQHolding?.shares > 0 ? priorQHolding.value_usd / priorQHolding.shares : 0;
-    const priorYAvgPrice = priorYHolding?.shares > 0 ? priorYHolding.value_usd / priorYHolding.shares : 0;
-
-    // Queue up all price requests with average price fallback
+    // Queue up all price requests (no fallback to average price)
     if (holding.ticker) {
       const currentKey = `${holding.ticker}-${currentReportDate}`;
       if (!(currentKey in requestMap)) {
         requestMap[currentKey] = priceRequests.length;
-        priceRequests.push(getEodPrice(supabase, holding.ticker, currentReportDate, currentAvgPrice));
+        priceRequests.push(getEodPrice(supabase, holding.ticker, currentReportDate));
       }
     }
 
@@ -349,7 +331,7 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
       const priorQKey = `${priorQHolding.ticker}-${priorQReportDate}`;
       if (!(priorQKey in requestMap)) {
         requestMap[priorQKey] = priceRequests.length;
-        priceRequests.push(getEodPrice(supabase, priorQHolding.ticker, priorQReportDate, priorQAvgPrice));
+        priceRequests.push(getEodPrice(supabase, priorQHolding.ticker, priorQReportDate));
       }
     }
 
@@ -357,7 +339,7 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
       const priorYKey = `${priorYHolding.ticker}-${priorYReportDate}`;
       if (!(priorYKey in requestMap)) {
         requestMap[priorYKey] = priceRequests.length;
-        priceRequests.push(getEodPrice(supabase, priorYHolding.ticker, priorYReportDate, priorYAvgPrice));
+        priceRequests.push(getEodPrice(supabase, priorYHolding.ticker, priorYReportDate));
       }
     }
   }
