@@ -86,151 +86,6 @@ function getQuarterEndDate(quarter: string, year: number): string {
   return quarterEndDates[quarter] || `${year}-12-31`;
 }
 
-// Helper function to fetch EOD price with suffix fallback (no average price fallback)
-async function getEodPrice(
-  supabase: any,
-  ticker: string | null,
-  reportDate: string
-): Promise<{ price: number | null; actualDate: string | null }> {
-  if (!ticker) {
-    console.log('[EOD] No ticker provided');
-    return { price: null, actualDate: null };
-  }
-
-  const normalizedTicker = normalizeTicker(ticker);
-  if (!normalizedTicker) {
-    console.log('[EOD] Ticker normalization failed');
-    return { price: null, actualDate: null };
-  }
-
-  console.log(`[EOD] Starting price lookup for ticker: ${normalizedTicker}, reportDate: ${reportDate}`);
-
-  // Check database cache first
-  try {
-    const { data: cachedPrice } = await supabase
-      .from('price_cache')
-      .select('price, report_date')
-      .eq('ticker', normalizedTicker)
-      .eq('report_date', reportDate)
-      .maybeSingle();
-
-    if (cachedPrice && cachedPrice.price !== null) {
-      console.log(`[EOD] Using cached price for ${normalizedTicker} on ${reportDate}: $${cachedPrice.price}`);
-      return { price: cachedPrice.price, actualDate: reportDate };
-    }
-  } catch (error) {
-    console.error(`[EOD] Cache check error:`, error);
-  }
-
-  // Try the ticker with suffix fallbacks for international markets
-  const tickerVariants = [
-    normalizedTicker,
-    `${normalizedTicker}.TO`,  // Toronto
-    `${normalizedTicker}.AX`,  // Australia
-    `${normalizedTicker}.L`,   // London
-    `${normalizedTicker}.DE`,  // Germany
-    `${normalizedTicker}.PA`,  // Paris
-  ];
-
-  for (const tickerVariant of tickerVariants) {
-    const result = await tryFetchEodPrice(supabase, tickerVariant, reportDate, normalizedTicker);
-    if (result.price !== null) {
-      return result;
-    }
-  }
-
-  console.log(`[EOD] No EOD price found for ${normalizedTicker} (tried all variants) within 10 days of ${reportDate}`);
-  return { price: null, actualDate: null };
-}
-
-// Helper to attempt price fetch for a specific ticker variant
-async function tryFetchEodPrice(
-  supabase: any,
-  tickerVariant: string,
-  reportDate: string,
-  originalTicker: string
-): Promise<{ price: number | null; actualDate: string | null }> {
-  const anchorDate = new Date(reportDate);
-  const reportDateTs = Math.floor(anchorDate.getTime() / 1000);
-
-  // Search backward from reportDate up to 10 days
-  const startDate = new Date(anchorDate);
-  startDate.setDate(startDate.getDate() - 10);
-  
-  const period1 = Math.floor(startDate.getTime() / 1000);
-  const period2 = Math.floor(anchorDate.getTime() / 1000);
-
-  try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${tickerVariant}?period1=${period1}&period2=${period2}&interval=1d`;
-    
-    console.log(`[EOD] Fetching ${tickerVariant} from ${startDate.toISOString().split('T')[0]} to ${reportDate}`);
-    
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0'
-      }
-    });
-
-    if (!response.ok) {
-      console.error(`[EOD] Yahoo Finance API error for ${tickerVariant}: ${response.status}`);
-      return { price: null, actualDate: null };
-    }
-
-    const data = await response.json();
-    const timestamps = data?.chart?.result?.[0]?.timestamp || [];
-    const closes = data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || [];
-    
-    if (timestamps.length === 0 || closes.length === 0) {
-      console.log(`[EOD] No data returned for ${tickerVariant}`);
-      return { price: null, actualDate: null };
-    }
-    
-    // Filter bars that are <= reportDate and find the latest
-    let latestPrice = null;
-    let latestDate = null;
-    let latestTs = 0;
-    
-    for (let i = 0; i < timestamps.length; i++) {
-      const barTs = timestamps[i];
-      const barClose = closes[i];
-      
-      if (barTs <= reportDateTs && barClose !== null && !isNaN(barClose) && barTs > latestTs) {
-        latestPrice = barClose;
-        latestTs = barTs;
-        latestDate = new Date(barTs * 1000).toISOString().split('T')[0];
-      }
-    }
-    
-    if (latestPrice !== null) {
-      const roundedPrice = Math.round(latestPrice * 100) / 100;
-      
-      console.log(`[EOD] ✓ Found price for ${tickerVariant}: $${roundedPrice} on ${latestDate}`);
-      
-      // Save to database cache using original ticker (only successful lookups)
-      try {
-        await supabase
-          .from('price_cache')
-          .upsert({
-            ticker: originalTicker,
-            report_date: reportDate,
-            price: roundedPrice
-          }, {
-            onConflict: 'ticker,report_date'
-          });
-        console.log(`[EOD] Cached price for ${originalTicker}`);
-      } catch (error) {
-        console.error(`[EOD] Error saving to cache:`, error);
-      }
-      
-      return { price: roundedPrice, actualDate: latestDate };
-    }
-  } catch (error) {
-    console.error(`[EOD] Error fetching ${tickerVariant}:`, error);
-  }
-
-  return { price: null, actualDate: null };
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -316,13 +171,6 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
   const tableData = [];
   const currentHoldings = current.holdings || [];
 
-  // Get reporting dates for each period
-  const currentReportDate = getQuarterEndDate(current.quarter, current.year);
-  const priorQReportDate = priorQ ? getQuarterEndDate(priorQ.quarter, priorQ.year) : '';
-  const priorYReportDate = priorY ? getQuarterEndDate(priorY.quarter, priorY.year) : '';
-
-  console.log(`Report dates - Current: ${currentReportDate}, Prior Q: ${priorQReportDate}, Prior Y: ${priorYReportDate}`);
-
   // First pass: resolve tickers from company names using Yahoo Finance search
   const tickerResolutionPromises = [];
   for (const holding of currentHoldings) {
@@ -355,67 +203,7 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
     }
   }
 
-  // Clean up null price_cache entries to force fresh data
-  try {
-    const { error: cleanupError } = await supabase
-      .from('price_cache')
-      .delete()
-      .is('price', null);
-    
-    if (cleanupError) {
-      console.error('[Cache Cleanup] Error removing null entries:', cleanupError);
-    } else {
-      console.log('[Cache Cleanup] Removed null price entries from cache');
-    }
-  } catch (error) {
-    console.error('[Cache Cleanup] Exception:', error);
-  }
-
-  // Collect all unique tickers and dates for batch processing
-  const priceRequests: Promise<{ price: number | null; actualDate: string | null }>[] = [];
-  const requestMap: { [key: string]: number } = {};
-  
-  for (const holding of currentHoldings) {
-    const priorQHolding = priorQ?.holdings?.find((h: any) => h.cusip === holding.cusip);
-    const priorYHolding = priorY?.holdings?.find((h: any) => h.cusip === holding.cusip);
-
-    // Queue up all price requests (no fallback to average price)
-    if (holding.ticker) {
-      const currentKey = `${holding.ticker}-${currentReportDate}`;
-      if (!(currentKey in requestMap)) {
-        requestMap[currentKey] = priceRequests.length;
-        priceRequests.push(getEodPrice(supabase, holding.ticker, currentReportDate));
-      }
-    }
-
-    if (priorQHolding?.ticker && priorQReportDate) {
-      const priorQKey = `${priorQHolding.ticker}-${priorQReportDate}`;
-      if (!(priorQKey in requestMap)) {
-        requestMap[priorQKey] = priceRequests.length;
-        priceRequests.push(getEodPrice(supabase, priorQHolding.ticker, priorQReportDate));
-      }
-    }
-
-    if (priorYHolding?.ticker && priorYReportDate) {
-      const priorYKey = `${priorYHolding.ticker}-${priorYReportDate}`;
-      if (!(priorYKey in requestMap)) {
-        requestMap[priorYKey] = priceRequests.length;
-        priceRequests.push(getEodPrice(supabase, priorYHolding.ticker, priorYReportDate));
-      }
-    }
-  }
-
-  // Fetch all prices in parallel
-  console.log(`Fetching ${priceRequests.length} unique stock prices...`);
-  const priceResults = await Promise.all(priceRequests);
-  
-  // Rebuild the price cache from results
-  const priceMap: { [key: string]: { price: number | null; actualDate: string | null } } = {};
-  for (const key in requestMap) {
-    priceMap[key] = priceResults[requestMap[key]];
-  }
-
-  // Now build the comparison table with cached prices
+  // Now build the comparison table
   for (const holding of currentHoldings) {
     const priorQHolding = priorQ?.holdings?.find((h: any) => h.cusip === holding.cusip);
     const priorYHolding = priorY?.holdings?.find((h: any) => h.cusip === holding.cusip);
@@ -425,68 +213,43 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
     const priorQAvgPrice = priorQHolding?.shares > 0 ? priorQHolding.value_usd / priorQHolding.shares : 0;
     const priorYAvgPrice = priorYHolding?.shares > 0 ? priorYHolding.value_usd / priorYHolding.shares : 0;
 
-    // Get EOD prices from results (no fallback to avg price or 0)
-    const currentKey = `${holding.ticker}-${currentReportDate}`;
-    const priorQKey = `${priorQHolding?.ticker}-${priorQReportDate}`;
-    const priorYKey = `${priorYHolding?.ticker}-${priorYReportDate}`;
-
-    const currentEodResult = priceMap[currentKey] || { price: null, actualDate: null };
-    const priorQEodResult = priceMap[priorQKey] || { price: null, actualDate: null };
-    const priorYEodResult = priceMap[priorYKey] || { price: null, actualDate: null };
-
-    console.log(`[DEBUG] ${holding.company_name} (${holding.ticker || 'N/A'}): EOD=${currentEodResult.price} (${currentEodResult.actualDate}), Avg=${currentAvgPrice.toFixed(2)}`);
-
-    // Calculate market value using EOD price
-    const currentMarketValue = currentEodResult.price !== null && holding.shares 
-      ? currentEodResult.price * holding.shares 
-      : holding.value_usd;
-
     const row = {
       company: holding.company_name,
       ticker: holding.ticker || 'N/A',
       shares: holding.shares || 0,
       currentValue: holding.value_usd,
-      currentMarketValue: currentMarketValue,
       currentPct: holding.percentage_of_portfolio,
       currentAvgPrice: currentAvgPrice,
-      currentEodPrice: currentEodResult.price,
-      currentEodDate: currentEodResult.actualDate,
       priorQValue: priorQHolding?.value_usd || 0,
       priorQPct: priorQHolding?.percentage_of_portfolio || 0,
       priorQAvgPrice: priorQAvgPrice,
-      priorQEodPrice: priorQEodResult.price,
-      priorQEodDate: priorQEodResult.actualDate,
       qoqValueChange: holding.value_usd - (priorQHolding?.value_usd || 0),
       qoqPctChange: holding.percentage_of_portfolio - (priorQHolding?.percentage_of_portfolio || 0),
       qoqAvgPriceChange: currentAvgPrice - priorQAvgPrice,
-      qoqEodPriceChange: currentEodResult.price && priorQEodResult.price ? currentEodResult.price - priorQEodResult.price : null,
       priorYValue: priorYHolding?.value_usd || 0,
       priorYPct: priorYHolding?.percentage_of_portfolio || 0,
       priorYAvgPrice: priorYAvgPrice,
-      priorYEodPrice: priorYEodResult.price,
-      priorYEodDate: priorYEodResult.actualDate,
       yoyValueChange: holding.value_usd - (priorYHolding?.value_usd || 0),
       yoyPctChange: holding.percentage_of_portfolio - (priorYHolding?.percentage_of_portfolio || 0),
-      yoyAvgPriceChange: currentAvgPrice - priorYAvgPrice,
-      yoyEodPriceChange: currentEodResult.price && priorYEodResult.price ? currentEodResult.price - priorYEodResult.price : null
+      yoyAvgPriceChange: currentAvgPrice - priorYAvgPrice
     };
 
     tableData.push(row);
   }
 
-  // Calculate total portfolio value based on market values
-  const totalPortfolioValue = tableData.reduce((sum, row) => sum + row.currentMarketValue, 0);
+  // Calculate total portfolio value
+  const totalPortfolioValue = tableData.reduce((sum, row) => sum + row.currentValue, 0);
   
   console.log(`Total Portfolio Value: $${totalPortfolioValue.toLocaleString()}`);
 
-  // Add percentOfPortfolio based on market value
+  // Add percentOfPortfolio based on value
   const enrichedData = tableData.map(row => ({
     ...row,
-    percentOfPortfolio: totalPortfolioValue > 0 ? (row.currentMarketValue / totalPortfolioValue) * 100 : 0
+    percentOfPortfolio: totalPortfolioValue > 0 ? (row.currentValue / totalPortfolioValue) * 100 : 0
   }));
 
-  // Sort by market value descending
-  enrichedData.sort((a, b) => b.currentMarketValue - a.currentMarketValue);
+  // Sort by value descending
+  enrichedData.sort((a, b) => b.currentValue - a.currentValue);
 
   // Take only top 20 holdings
   const top20Holdings = enrichedData.slice(0, 20);

@@ -65,23 +65,18 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
               <TableHead className="text-right font-semibold">Current ($)</TableHead>
               <TableHead className="text-right font-semibold">Current (%)</TableHead>
               <TableHead className="text-right font-semibold">Avg Price</TableHead>
-              <TableHead className="text-right font-semibold">EOD Price</TableHead>
               <TableHead className="text-right font-semibold">Prior Q ($)</TableHead>
               <TableHead className="text-right font-semibold">Prior Q (%)</TableHead>
               <TableHead className="text-right font-semibold">Prior Q Avg</TableHead>
-              <TableHead className="text-right font-semibold">Prior Q EOD</TableHead>
               <TableHead className="text-right font-semibold">QoQ Δ ($)</TableHead>
               <TableHead className="text-right font-semibold">QoQ Δ (%)</TableHead>
               <TableHead className="text-right font-semibold">QoQ Δ Avg</TableHead>
-              <TableHead className="text-right font-semibold">QoQ Δ EOD</TableHead>
               <TableHead className="text-right font-semibold">Prior Y ($)</TableHead>
               <TableHead className="text-right font-semibold">Prior Y (%)</TableHead>
               <TableHead className="text-right font-semibold">Prior Y Avg</TableHead>
-              <TableHead className="text-right font-semibold">Prior Y EOD</TableHead>
               <TableHead className="text-right font-semibold">YoY Δ ($)</TableHead>
               <TableHead className="text-right font-semibold">YoY Δ (%)</TableHead>
               <TableHead className="text-right font-semibold">YoY Δ Avg</TableHead>
-              <TableHead className="text-right font-semibold">YoY Δ EOD</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -92,11 +87,9 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
                 <TableCell className="text-right">{formatCurrency(row.currentValue)}</TableCell>
                 <TableCell className="text-right">{row.currentPct.toFixed(2)}%</TableCell>
                 <TableCell className="text-right">{formatPrice(row.currentAvgPrice)}</TableCell>
-                <TableCell className="text-right">{formatPrice(row.currentEodPrice)}</TableCell>
                 <TableCell className="text-right text-muted-foreground">{formatCurrency(row.priorQValue)}</TableCell>
                 <TableCell className="text-right text-muted-foreground">{row.priorQPct.toFixed(2)}%</TableCell>
                 <TableCell className="text-right text-muted-foreground">{formatPrice(row.priorQAvgPrice)}</TableCell>
-                <TableCell className="text-right text-muted-foreground">{formatPrice(row.priorQEodPrice)}</TableCell>
                 <TableCell className={`text-right font-semibold ${getChangeColor(row.qoqValueChange)}`}>
                   {getChangeIcon(row.qoqValueChange)} {formatCurrency(row.qoqValueChange)}
                 </TableCell>
@@ -106,15 +99,9 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
                 <TableCell className={`text-right font-semibold ${getChangeColor(row.qoqAvgPriceChange)}`}>
                   {getChangeIcon(row.qoqAvgPriceChange)} {formatPrice(Math.abs(row.qoqAvgPriceChange))}
                 </TableCell>
-                <TableCell className={`text-right font-semibold ${row.qoqEodPriceChange !== null ? getChangeColor(row.qoqEodPriceChange) : ''}`}>
-                  {row.qoqEodPriceChange !== null ? (
-                    <>{getChangeIcon(row.qoqEodPriceChange)} {formatPrice(Math.abs(row.qoqEodPriceChange))}</>
-                  ) : '—'}
-                </TableCell>
                 <TableCell className="text-right text-muted-foreground">{formatCurrency(row.priorYValue)}</TableCell>
                 <TableCell className="text-right text-muted-foreground">{row.priorYPct.toFixed(2)}%</TableCell>
                 <TableCell className="text-right text-muted-foreground">{formatPrice(row.priorYAvgPrice)}</TableCell>
-                <TableCell className="text-right text-muted-foreground">{formatPrice(row.priorYEodPrice)}</TableCell>
                 <TableCell className={`text-right font-semibold ${getChangeColor(row.yoyValueChange)}`}>
                   {getChangeIcon(row.yoyValueChange)} {formatCurrency(row.yoyValueChange)}
                 </TableCell>
@@ -123,11 +110,6 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
                 </TableCell>
                 <TableCell className={`text-right font-semibold ${getChangeColor(row.yoyAvgPriceChange)}`}>
                   {getChangeIcon(row.yoyAvgPriceChange)} {formatPrice(Math.abs(row.yoyAvgPriceChange))}
-                </TableCell>
-                <TableCell className={`text-right font-semibold ${row.yoyEodPriceChange !== null ? getChangeColor(row.yoyEodPriceChange) : ''}`}>
-                  {row.yoyEodPriceChange !== null ? (
-                    <>{getChangeIcon(row.yoyEodPriceChange)} {formatPrice(Math.abs(row.yoyEodPriceChange))}</>
-                  ) : '—'}
                 </TableCell>
               </TableRow>
             ))}
