@@ -226,12 +226,14 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
       qoqValueChange: holding.value_usd - (priorQHolding?.value_usd || 0),
       qoqPctChange: holding.percentage_of_portfolio - (priorQHolding?.percentage_of_portfolio || 0),
       qoqAvgPriceChange: currentAvgPrice - priorQAvgPrice,
+      qoqAvgPriceChangePct: priorQAvgPrice > 0 ? ((currentAvgPrice - priorQAvgPrice) / priorQAvgPrice) * 100 : null,
       priorYValue: priorYHolding?.value_usd || 0,
       priorYPct: priorYHolding?.percentage_of_portfolio || 0,
       priorYAvgPrice: priorYAvgPrice,
       yoyValueChange: holding.value_usd - (priorYHolding?.value_usd || 0),
       yoyPctChange: holding.percentage_of_portfolio - (priorYHolding?.percentage_of_portfolio || 0),
-      yoyAvgPriceChange: currentAvgPrice - priorYAvgPrice
+      yoyAvgPriceChange: currentAvgPrice - priorYAvgPrice,
+      yoyAvgPriceChangePct: priorYAvgPrice > 0 ? ((currentAvgPrice - priorYAvgPrice) / priorYAvgPrice) * 100 : null
     };
 
     tableData.push(row);
