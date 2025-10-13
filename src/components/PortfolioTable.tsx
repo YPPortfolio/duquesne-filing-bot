@@ -11,9 +11,16 @@ import { TrendingUp, TrendingDown } from "lucide-react";
 
 interface PortfolioTableProps {
   data: any[];
+  filing?: any;
 }
 
-export function PortfolioTable({ data }: PortfolioTableProps) {
+export function PortfolioTable({ data, filing }: PortfolioTableProps) {
+  // Helper to format the reporting date
+  const formatReportingDate = () => {
+    if (!filing?.filing_date) return '';
+    const date = new Date(filing.filing_date);
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  };
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -52,7 +59,9 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
   return (
     <Card className="overflow-hidden">
       <div className="p-6 border-b border-border">
-        <h2 className="text-2xl font-bold">Portfolio Holdings</h2>
+        <h2 className="text-2xl font-bold">
+          Portfolio Holdings {filing && `(As of ${formatReportingDate()}, Reporting Date)`}
+        </h2>
         <p className="text-muted-foreground mt-1">Top 20 holdings by portfolio weight with quarterly and annual comparisons</p>
       </div>
       
@@ -61,18 +70,17 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
           <TableHeader>
             <TableRow className="bg-muted/50">
               <TableHead className="font-semibold">Company</TableHead>
-              <TableHead className="text-right font-semibold">% Portfolio</TableHead>
               <TableHead className="text-right font-semibold">Current ($)</TableHead>
-              <TableHead className="text-right font-semibold">Current (%)</TableHead>
+              <TableHead className="text-right font-semibold">Latest Reporting Date (% of Total Portfolio Value)</TableHead>
               <TableHead className="text-right font-semibold">EOD Stock Price</TableHead>
               <TableHead className="text-right font-semibold">Prior Q ($)</TableHead>
-              <TableHead className="text-right font-semibold">Prior Q (%)</TableHead>
+              <TableHead className="text-right font-semibold">Prior Q (% of Total)</TableHead>
               <TableHead className="text-right font-semibold">Prior Q EOD</TableHead>
               <TableHead className="text-right font-semibold">QoQ Δ ($)</TableHead>
               <TableHead className="text-right font-semibold">QoQ Δ (%)</TableHead>
               <TableHead className="text-right font-semibold">QoQ Δ EOD Price (%)</TableHead>
               <TableHead className="text-right font-semibold">Prior Y ($)</TableHead>
-              <TableHead className="text-right font-semibold">Prior Y (%)</TableHead>
+              <TableHead className="text-right font-semibold">Prior Y (% of Total)</TableHead>
               <TableHead className="text-right font-semibold">Prior Y EOD</TableHead>
               <TableHead className="text-right font-semibold">YoY Δ ($)</TableHead>
               <TableHead className="text-right font-semibold">YoY Δ (%)</TableHead>
@@ -83,7 +91,6 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
             {data.map((row, index) => (
               <TableRow key={index} className="hover:bg-muted/30">
                 <TableCell className="font-medium">{row.company}</TableCell>
-                <TableCell className="text-right font-bold text-primary">{row.percentOfPortfolio?.toFixed(2)}%</TableCell>
                 <TableCell className="text-right">{formatCurrency(row.currentValue)}</TableCell>
                 <TableCell className="text-right">{row.currentPct.toFixed(2)}%</TableCell>
                 <TableCell className="text-right">{formatPrice(row.currentAvgPrice)}</TableCell>

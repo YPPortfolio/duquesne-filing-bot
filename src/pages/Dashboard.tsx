@@ -246,7 +246,7 @@ export default function Dashboard() {
 
             {/* Portfolio Table */}
             {reportData.comparisonData && (
-              <PortfolioTable data={reportData.comparisonData} />
+              <PortfolioTable data={reportData.comparisonData} filing={reportData.currentFiling} />
             )}
           </div>
         ) : (
