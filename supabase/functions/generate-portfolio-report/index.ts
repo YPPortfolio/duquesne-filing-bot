@@ -86,7 +86,7 @@ function getQuarterEndDate(quarter: string, year: number): string {
   return quarterEndDates[quarter] || `${year}-12-31`;
 }
 
-// Helper function to fetch EOD price (no average price fallback)
+// Helper function to fetch EOD price with suffix fallback (no average price fallback)
 async function getEodPrice(
   supabase: any,
   ticker: string | null,
@@ -102,6 +102,8 @@ async function getEodPrice(
     console.log('[EOD] Ticker normalization failed');
     return { price: null, actualDate: null };
   }
+
+  console.log(`[EOD] Starting price lookup for ticker: ${normalizedTicker}, reportDate: ${reportDate}`);
 
   // Check database cache first
   try {
@@ -120,79 +122,112 @@ async function getEodPrice(
     console.error(`[EOD] Cache check error:`, error);
   }
 
-  // Step backward from reportDate to find the last trading day (max 7 days)
-  const anchorDate = new Date(reportDate);
-  const reportDateTs = Math.floor(anchorDate.getTime() / 1000);
+  // Try the ticker with suffix fallbacks for international markets
+  const tickerVariants = [
+    normalizedTicker,
+    `${normalizedTicker}.TO`,  // Toronto
+    `${normalizedTicker}.AX`,  // Australia
+    `${normalizedTicker}.L`,   // London
+    `${normalizedTicker}.DE`,  // Germany
+    `${normalizedTicker}.PA`,  // Paris
+  ];
 
-  for (let lookback = 0; lookback <= 7; lookback++) {
-    const searchDate = new Date(anchorDate);
-    searchDate.setDate(searchDate.getDate() - lookback);
-    
-    const period1 = Math.floor(searchDate.getTime() / 1000);
-    const period2 = Math.floor((searchDate.getTime() / 1000) + 86400); // +1 day
-
-    try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${normalizedTicker}?period1=${period1}&period2=${period2}&interval=1d`;
-      
-      console.log(`[EOD] Fetching ${normalizedTicker} for ${searchDate.toISOString().split('T')[0]} (lookback: ${lookback})`);
-      
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0'
-        }
-      });
-
-      if (!response.ok) {
-        console.error(`[EOD] Yahoo Finance API error for ${normalizedTicker}: ${response.status}`);
-        continue;
-      }
-
-      const data = await response.json();
-      const timestamps = data?.chart?.result?.[0]?.timestamp || [];
-      const closes = data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || [];
-      
-      // Filter bars that are <= reportDate and find the latest
-      let latestPrice = null;
-      let latestDate = null;
-      
-      for (let i = 0; i < timestamps.length; i++) {
-        const barTs = timestamps[i];
-        const barClose = closes[i];
-        
-        if (barTs <= reportDateTs && barClose !== null && !isNaN(barClose)) {
-          latestPrice = barClose;
-          latestDate = new Date(barTs * 1000).toISOString().split('T')[0];
-        }
-      }
-      
-      if (latestPrice !== null) {
-        const roundedPrice = Math.round(latestPrice * 100) / 100;
-        
-        console.log(`[EOD] Found price for ${normalizedTicker}: $${roundedPrice} on ${latestDate}`);
-        
-        // Save to database cache (only successful lookups)
-        try {
-          await supabase
-            .from('price_cache')
-            .upsert({
-              ticker: normalizedTicker,
-              report_date: reportDate,
-              price: roundedPrice
-            }, {
-              onConflict: 'ticker,report_date'
-            });
-        } catch (error) {
-          console.error(`[EOD] Error saving to cache:`, error);
-        }
-        
-        return { price: roundedPrice, actualDate: latestDate };
-      }
-    } catch (error) {
-      console.error(`[EOD] Error fetching ${normalizedTicker} for lookback ${lookback}:`, error);
+  for (const tickerVariant of tickerVariants) {
+    const result = await tryFetchEodPrice(supabase, tickerVariant, reportDate, normalizedTicker);
+    if (result.price !== null) {
+      return result;
     }
   }
 
-  console.log(`[EOD] No EOD price found for ${normalizedTicker} within 7 days of ${reportDate}`);
+  console.log(`[EOD] No EOD price found for ${normalizedTicker} (tried all variants) within 10 days of ${reportDate}`);
+  return { price: null, actualDate: null };
+}
+
+// Helper to attempt price fetch for a specific ticker variant
+async function tryFetchEodPrice(
+  supabase: any,
+  tickerVariant: string,
+  reportDate: string,
+  originalTicker: string
+): Promise<{ price: number | null; actualDate: string | null }> {
+  const anchorDate = new Date(reportDate);
+  const reportDateTs = Math.floor(anchorDate.getTime() / 1000);
+
+  // Search backward from reportDate up to 10 days
+  const startDate = new Date(anchorDate);
+  startDate.setDate(startDate.getDate() - 10);
+  
+  const period1 = Math.floor(startDate.getTime() / 1000);
+  const period2 = Math.floor(anchorDate.getTime() / 1000);
+
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${tickerVariant}?period1=${period1}&period2=${period2}&interval=1d`;
+    
+    console.log(`[EOD] Fetching ${tickerVariant} from ${startDate.toISOString().split('T')[0]} to ${reportDate}`);
+    
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0'
+      }
+    });
+
+    if (!response.ok) {
+      console.error(`[EOD] Yahoo Finance API error for ${tickerVariant}: ${response.status}`);
+      return { price: null, actualDate: null };
+    }
+
+    const data = await response.json();
+    const timestamps = data?.chart?.result?.[0]?.timestamp || [];
+    const closes = data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || [];
+    
+    if (timestamps.length === 0 || closes.length === 0) {
+      console.log(`[EOD] No data returned for ${tickerVariant}`);
+      return { price: null, actualDate: null };
+    }
+    
+    // Filter bars that are <= reportDate and find the latest
+    let latestPrice = null;
+    let latestDate = null;
+    let latestTs = 0;
+    
+    for (let i = 0; i < timestamps.length; i++) {
+      const barTs = timestamps[i];
+      const barClose = closes[i];
+      
+      if (barTs <= reportDateTs && barClose !== null && !isNaN(barClose) && barTs > latestTs) {
+        latestPrice = barClose;
+        latestTs = barTs;
+        latestDate = new Date(barTs * 1000).toISOString().split('T')[0];
+      }
+    }
+    
+    if (latestPrice !== null) {
+      const roundedPrice = Math.round(latestPrice * 100) / 100;
+      
+      console.log(`[EOD] ✓ Found price for ${tickerVariant}: $${roundedPrice} on ${latestDate}`);
+      
+      // Save to database cache using original ticker (only successful lookups)
+      try {
+        await supabase
+          .from('price_cache')
+          .upsert({
+            ticker: originalTicker,
+            report_date: reportDate,
+            price: roundedPrice
+          }, {
+            onConflict: 'ticker,report_date'
+          });
+        console.log(`[EOD] Cached price for ${originalTicker}`);
+      } catch (error) {
+        console.error(`[EOD] Error saving to cache:`, error);
+      }
+      
+      return { price: roundedPrice, actualDate: latestDate };
+    }
+  } catch (error) {
+    console.error(`[EOD] Error fetching ${tickerVariant}:`, error);
+  }
+
   return { price: null, actualDate: null };
 }
 
@@ -308,6 +343,32 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
   if (tickerResolutionPromises.length > 0) {
     console.log(`Resolving ${tickerResolutionPromises.length} company-to-ticker mappings via Yahoo...`);
     await Promise.all(tickerResolutionPromises);
+  }
+
+  // Log resolved tickers for verification
+  console.log(`[Ticker Resolution Complete] Summary:`);
+  for (const holding of currentHoldings) {
+    if (holding.ticker) {
+      console.log(`  ✓ ${holding.company_name}: ${holding.ticker}`);
+    } else {
+      console.log(`  ✗ ${holding.company_name}: NO TICKER FOUND`);
+    }
+  }
+
+  // Clean up null price_cache entries to force fresh data
+  try {
+    const { error: cleanupError } = await supabase
+      .from('price_cache')
+      .delete()
+      .is('price', null);
+    
+    if (cleanupError) {
+      console.error('[Cache Cleanup] Error removing null entries:', cleanupError);
+    } else {
+      console.log('[Cache Cleanup] Removed null price entries from cache');
+    }
+  } catch (error) {
+    console.error('[Cache Cleanup] Exception:', error);
   }
 
   // Collect all unique tickers and dates for batch processing
