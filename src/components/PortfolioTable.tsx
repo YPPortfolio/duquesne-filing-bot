@@ -64,19 +64,19 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
               <TableHead className="text-right font-semibold">% Portfolio</TableHead>
               <TableHead className="text-right font-semibold">Current ($)</TableHead>
               <TableHead className="text-right font-semibold">Current (%)</TableHead>
-              <TableHead className="text-right font-semibold">Avg Price</TableHead>
+              <TableHead className="text-right font-semibold">EOD Stock Price</TableHead>
               <TableHead className="text-right font-semibold">Prior Q ($)</TableHead>
               <TableHead className="text-right font-semibold">Prior Q (%)</TableHead>
-              <TableHead className="text-right font-semibold">Prior Q Avg</TableHead>
+              <TableHead className="text-right font-semibold">Prior Q EOD</TableHead>
               <TableHead className="text-right font-semibold">QoQ Δ ($)</TableHead>
               <TableHead className="text-right font-semibold">QoQ Δ (%)</TableHead>
-              <TableHead className="text-right font-semibold">QoQ Δ Avg</TableHead>
+              <TableHead className="text-right font-semibold">QoQ Δ EOD</TableHead>
               <TableHead className="text-right font-semibold">Prior Y ($)</TableHead>
               <TableHead className="text-right font-semibold">Prior Y (%)</TableHead>
-              <TableHead className="text-right font-semibold">Prior Y Avg</TableHead>
+              <TableHead className="text-right font-semibold">Prior Y EOD</TableHead>
               <TableHead className="text-right font-semibold">YoY Δ ($)</TableHead>
               <TableHead className="text-right font-semibold">YoY Δ (%)</TableHead>
-              <TableHead className="text-right font-semibold">YoY Δ Avg</TableHead>
+              <TableHead className="text-right font-semibold">YoY Δ EOD</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
