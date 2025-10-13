@@ -70,13 +70,13 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
               <TableHead className="text-right font-semibold">Prior Q EOD</TableHead>
               <TableHead className="text-right font-semibold">QoQ Δ ($)</TableHead>
               <TableHead className="text-right font-semibold">QoQ Δ (%)</TableHead>
-              <TableHead className="text-right font-semibold">QoQ delta EOD price (%)</TableHead>
+              <TableHead className="text-right font-semibold">QoQ Δ EOD Price (%)</TableHead>
               <TableHead className="text-right font-semibold">Prior Y ($)</TableHead>
               <TableHead className="text-right font-semibold">Prior Y (%)</TableHead>
               <TableHead className="text-right font-semibold">Prior Y EOD</TableHead>
               <TableHead className="text-right font-semibold">YoY Δ ($)</TableHead>
               <TableHead className="text-right font-semibold">YoY Δ (%)</TableHead>
-              <TableHead className="text-right font-semibold">YoY delta EOD price (%)</TableHead>
+              <TableHead className="text-right font-semibold">YoY Δ EOD Price (%)</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
