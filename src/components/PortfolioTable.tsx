@@ -15,11 +15,23 @@ interface PortfolioTableProps {
 }
 
 export function PortfolioTable({ data, filing }: PortfolioTableProps) {
-  // Helper to format the reporting date
-  const formatReportingDate = () => {
+  // Helper to format the filing date
+  const formatFilingDate = () => {
     if (!filing?.filing_date) return '';
     const date = new Date(filing.filing_date);
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  };
+
+  // Helper to get quarter end date
+  const getQuarterEndDate = () => {
+    if (!filing?.quarter || !filing?.year) return '';
+    const quarterEndDates: { [key: string]: string } = {
+      'Q1': `March 31, ${filing.year}`,
+      'Q2': `June 30, ${filing.year}`,
+      'Q3': `September 30, ${filing.year}`,
+      'Q4': `December 31, ${filing.year}`,
+    };
+    return quarterEndDates[filing.quarter] || '';
   };
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -60,7 +72,7 @@ export function PortfolioTable({ data, filing }: PortfolioTableProps) {
     <Card className="overflow-hidden">
       <div className="p-6 border-b border-border">
         <h2 className="text-2xl font-bold">
-          Portfolio Holdings {filing && `(As of ${formatReportingDate()}, Reporting Date)`}
+          Portfolio Holdings {filing && `(As of ${formatFilingDate()}, Latest Quarter End Date: ${getQuarterEndDate()})`}
         </h2>
         <p className="text-muted-foreground mt-1">Top 20 holdings by portfolio weight with quarterly and annual comparisons</p>
       </div>
@@ -75,15 +87,15 @@ export function PortfolioTable({ data, filing }: PortfolioTableProps) {
               <TableHead className="text-right font-semibold">EOD Stock Price</TableHead>
               <TableHead className="text-right font-semibold">Prior Q ($)</TableHead>
               <TableHead className="text-right font-semibold">Prior Q (% of Total)</TableHead>
-              <TableHead className="text-right font-semibold">Prior Q EOD</TableHead>
+              <TableHead className="text-right font-semibold">Prior Q EOD Stock Price</TableHead>
               <TableHead className="text-right font-semibold">QoQ Δ ($)</TableHead>
-              <TableHead className="text-right font-semibold">QoQ Δ (%)</TableHead>
+              <TableHead className="text-right font-semibold">QoQ Δ (percentage points)</TableHead>
               <TableHead className="text-right font-semibold">QoQ Δ EOD Price (%)</TableHead>
               <TableHead className="text-right font-semibold">Prior Y ($)</TableHead>
               <TableHead className="text-right font-semibold">Prior Y (% of Total)</TableHead>
-              <TableHead className="text-right font-semibold">Prior Y EOD</TableHead>
+              <TableHead className="text-right font-semibold">Prior Y EOD Stock Price</TableHead>
               <TableHead className="text-right font-semibold">YoY Δ ($)</TableHead>
-              <TableHead className="text-right font-semibold">YoY Δ (%)</TableHead>
+              <TableHead className="text-right font-semibold">YoY Δ (percentage points)</TableHead>
               <TableHead className="text-right font-semibold">YoY Δ EOD Price (%)</TableHead>
             </TableRow>
           </TableHeader>
