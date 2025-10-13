@@ -436,10 +436,17 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
 
     console.log(`[DEBUG] ${holding.company_name} (${holding.ticker || 'N/A'}): EOD=${currentEodResult.price} (${currentEodResult.actualDate}), Avg=${currentAvgPrice.toFixed(2)}`);
 
+    // Calculate market value using EOD price
+    const currentMarketValue = currentEodResult.price !== null && holding.shares 
+      ? currentEodResult.price * holding.shares 
+      : holding.value_usd;
+
     const row = {
       company: holding.company_name,
       ticker: holding.ticker || 'N/A',
+      shares: holding.shares || 0,
       currentValue: holding.value_usd,
+      currentMarketValue: currentMarketValue,
       currentPct: holding.percentage_of_portfolio,
       currentAvgPrice: currentAvgPrice,
       currentEodPrice: currentEodResult.price,
@@ -467,10 +474,27 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
     tableData.push(row);
   }
 
-  console.log(`Generated comparison data for ${tableData.length} holdings`);
+  // Calculate total portfolio value based on market values
+  const totalPortfolioValue = tableData.reduce((sum, row) => sum + row.currentMarketValue, 0);
   
-  // Sort by current value descending
-  return tableData.sort((a, b) => b.currentValue - a.currentValue);
+  console.log(`Total Portfolio Value: $${totalPortfolioValue.toLocaleString()}`);
+
+  // Add percentOfPortfolio based on market value
+  const enrichedData = tableData.map(row => ({
+    ...row,
+    percentOfPortfolio: totalPortfolioValue > 0 ? (row.currentMarketValue / totalPortfolioValue) * 100 : 0
+  }));
+
+  // Sort by market value descending
+  enrichedData.sort((a, b) => b.currentMarketValue - a.currentMarketValue);
+
+  // Take only top 20 holdings
+  const top20Holdings = enrichedData.slice(0, 20);
+
+  console.log(`Generated comparison data for ${tableData.length} holdings, showing top 20`);
+  console.log(`Top 20 holdings represent ${top20Holdings.reduce((sum, h) => sum + h.percentOfPortfolio, 0).toFixed(2)}% of portfolio`);
+  
+  return top20Holdings;
 }
 
 async function generateAISummary(comparisonData: any[], filing: any): Promise<string> {

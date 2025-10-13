@@ -53,7 +53,7 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
     <Card className="overflow-hidden">
       <div className="p-6 border-b border-border">
         <h2 className="text-2xl font-bold">Portfolio Holdings</h2>
-        <p className="text-muted-foreground mt-1">Top {data.length} holdings with quarterly and annual comparisons</p>
+        <p className="text-muted-foreground mt-1">Top 20 holdings by portfolio weight with quarterly and annual comparisons</p>
       </div>
       
       <div className="overflow-x-auto">
@@ -61,6 +61,7 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
           <TableHeader>
             <TableRow className="bg-muted/50">
               <TableHead className="font-semibold">Company</TableHead>
+              <TableHead className="text-right font-semibold">% Portfolio</TableHead>
               <TableHead className="text-right font-semibold">Current ($)</TableHead>
               <TableHead className="text-right font-semibold">Current (%)</TableHead>
               <TableHead className="text-right font-semibold">Avg Price</TableHead>
@@ -87,6 +88,7 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
             {data.map((row, index) => (
               <TableRow key={index} className="hover:bg-muted/30">
                 <TableCell className="font-medium">{row.company}</TableCell>
+                <TableCell className="text-right font-bold text-primary">{row.percentOfPortfolio?.toFixed(2)}%</TableCell>
                 <TableCell className="text-right">{formatCurrency(row.currentValue)}</TableCell>
                 <TableCell className="text-right">{row.currentPct.toFixed(2)}%</TableCell>
                 <TableCell className="text-right">{formatPrice(row.currentAvgPrice)}</TableCell>
@@ -131,6 +133,10 @@ export function PortfolioTable({ data }: PortfolioTableProps) {
             ))}
           </TableBody>
         </Table>
+      </div>
+      
+      <div className="p-4 border-t border-border bg-muted/20 text-sm text-muted-foreground text-center">
+        Displaying Top 20 Holdings by Portfolio Weight
       </div>
     </Card>
   );
