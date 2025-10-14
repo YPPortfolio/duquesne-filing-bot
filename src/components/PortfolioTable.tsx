@@ -115,9 +115,6 @@ export function PortfolioTable({ data, filing }: PortfolioTableProps) {
                 <TableCell className={`text-right font-semibold ${getChangeColor(row.qoqPctChange)}`}>
                   {formatPercent(row.qoqPctChange)}
                 </TableCell>
-                <TableCell className={`text-right font-semibold ${getChangeColor(row.qoqAvgPriceChange)}`}>
-                  {getChangeIcon(row.qoqAvgPriceChange)} {formatPrice(Math.abs(row.qoqAvgPriceChange))}
-                </TableCell>
                 <TableCell className={`text-right font-semibold ${row.qoqAvgPriceChangePct !== null ? getChangeColor(row.qoqAvgPriceChangePct) : ''}`}>
                   {row.qoqAvgPriceChangePct !== null ? formatPercent(row.qoqAvgPriceChangePct) : '—'}
                 </TableCell>
@@ -129,9 +126,6 @@ export function PortfolioTable({ data, filing }: PortfolioTableProps) {
                 </TableCell>
                 <TableCell className={`text-right font-semibold ${getChangeColor(row.yoyPctChange)}`}>
                   {formatPercent(row.yoyPctChange)}
-                </TableCell>
-                <TableCell className={`text-right font-semibold ${getChangeColor(row.yoyAvgPriceChange)}`}>
-                  {getChangeIcon(row.yoyAvgPriceChange)} {formatPrice(Math.abs(row.yoyAvgPriceChange))}
                 </TableCell>
                 <TableCell className={`text-right font-semibold ${row.yoyAvgPriceChangePct !== null ? getChangeColor(row.yoyAvgPriceChangePct) : ''}`}>
                   {row.yoyAvgPriceChangePct !== null ? formatPercent(row.yoyAvgPriceChangePct) : '—'}
