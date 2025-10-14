@@ -85,13 +85,13 @@ export function PortfolioTable({ data, filing }: PortfolioTableProps) {
               <TableHead className="text-right font-semibold">Current ($)</TableHead>
               <TableHead className="text-right font-semibold">Latest Reporting Date (% of Total Portfolio Value)</TableHead>
               <TableHead className="text-right font-semibold">EOD Stock Price</TableHead>
-              <TableHead className="text-right font-semibold">Prior Q ($)</TableHead>
+              <TableHead className="text-right font-semibold border-l-2 border-primary/30">Prior Q ($)</TableHead>
               <TableHead className="text-right font-semibold">Prior Q (% of Total)</TableHead>
               <TableHead className="text-right font-semibold">Prior Q EOD Stock Price</TableHead>
               <TableHead className="text-right font-semibold">QoQ Δ ($)</TableHead>
               <TableHead className="text-right font-semibold">QoQ Δ (percentage points)</TableHead>
               <TableHead className="text-right font-semibold">QoQ Δ EOD Price (%)</TableHead>
-              <TableHead className="text-right font-semibold">Prior Y ($)</TableHead>
+              <TableHead className="text-right font-semibold border-l-2 border-primary/30">Prior Y ($)</TableHead>
               <TableHead className="text-right font-semibold">Prior Y (% of Total)</TableHead>
               <TableHead className="text-right font-semibold">Prior Y EOD Stock Price</TableHead>
               <TableHead className="text-right font-semibold">YoY Δ ($)</TableHead>
@@ -106,7 +106,7 @@ export function PortfolioTable({ data, filing }: PortfolioTableProps) {
                 <TableCell className="text-right">{formatCurrency(row.currentValue)}</TableCell>
                 <TableCell className="text-right">{row.currentPct.toFixed(2)}%</TableCell>
                 <TableCell className="text-right">{formatPrice(row.currentAvgPrice)}</TableCell>
-                <TableCell className="text-right text-muted-foreground">{formatCurrency(row.priorQValue)}</TableCell>
+                <TableCell className="text-right text-muted-foreground border-l-2 border-primary/30">{formatCurrency(row.priorQValue)}</TableCell>
                 <TableCell className="text-right text-muted-foreground">{row.priorQPct.toFixed(2)}%</TableCell>
                 <TableCell className="text-right text-muted-foreground">{formatPrice(row.priorQAvgPrice)}</TableCell>
                 <TableCell className={`text-right font-semibold ${getChangeColor(row.qoqValueChange)}`}>
@@ -118,7 +118,7 @@ export function PortfolioTable({ data, filing }: PortfolioTableProps) {
                 <TableCell className={`text-right font-semibold ${row.qoqAvgPriceChangePct !== null ? getChangeColor(row.qoqAvgPriceChangePct) : ''}`}>
                   {row.qoqAvgPriceChangePct !== null ? formatPercent(row.qoqAvgPriceChangePct) : '—'}
                 </TableCell>
-                <TableCell className="text-right text-muted-foreground">{formatCurrency(row.priorYValue)}</TableCell>
+                <TableCell className="text-right text-muted-foreground border-l-2 border-primary/30">{formatCurrency(row.priorYValue)}</TableCell>
                 <TableCell className="text-right text-muted-foreground">{row.priorYPct.toFixed(2)}%</TableCell>
                 <TableCell className="text-right text-muted-foreground">{formatPrice(row.priorYAvgPrice)}</TableCell>
                 <TableCell className={`text-right font-semibold ${getChangeColor(row.yoyValueChange)}`}>
