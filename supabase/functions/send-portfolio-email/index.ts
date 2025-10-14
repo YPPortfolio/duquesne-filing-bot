@@ -154,41 +154,31 @@ function generateEmailHTML(reportData: any): string {
   const changeColor = (value: number) => 
     value >= 0 ? '#10B981' : '#EF4444';
 
-  // Format summary with proper paragraph breaks for better Gmail readability
+  // Format summary with consistent, clean HTML structure for Executive Summary
   const formatSummary = (text: string) => {
-    // Convert markdown to clean HTML
-    let formatted = text
-      // Remove any leading/trailing whitespace
-      .trim()
-      // Convert ### headers to h3
-      .replace(/###\s+([^\n]+)/g, '<h3 style="font-family:Arial,sans-serif; font-size:15px; font-weight:bold; color:#1a1a1a; margin:16px 0 8px 0;">$1</h3>')
-      // Convert ## headers to h2
-      .replace(/##\s+([^\n]+)/g, '<h2 style="font-family:Arial,sans-serif; font-size:16px; font-weight:bold; color:#1a1a1a; margin:20px 0 10px 0;">$1</h2>')
-      // Convert # headers to h2 (treating as section headers)
-      .replace(/#\s+([^\n]+)/g, '<h2 style="font-family:Arial,sans-serif; font-size:16px; font-weight:bold; color:#1a1a1a; margin:20px 0 10px 0;">$1</h2>')
-      // Convert **bold** to <strong>
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      // Convert *italic* to <em>
-      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-      // Convert _italic_ to <em>
-      .replace(/_([^_]+)_/g, '<em>$1</em>')
-      // Convert bullet points - * or -
-      .replace(/^\s*[-*]\s+(.+)$/gm, '<li style="margin:4px 0;">$1</li>')
-      // Convert numbered lists
-      .replace(/^\s*(\d+)\.\s+(.+)$/gm, '<li style="margin:4px 0;">$2</li>');
+    let formatted = text.trim();
     
-    // Wrap consecutive <li> tags in <ul>
-    formatted = formatted.replace(/(<li[^>]*>.*?<\/li>\s*)+/gs, (match) => {
-      return `<ul style="margin:8px 0; padding-left:20px; font-family:Arial,sans-serif; font-size:14px; color:#333;">${match}</ul>`;
+    // Convert **bold** section headers to <h3> with consistent styling
+    formatted = formatted.replace(/\*\*([^*]+)\*\*/g, (match, p1) => {
+      return `<h3 style="font-family:Arial,sans-serif; font-size:15px; font-weight:bold; color:#1a1a1a; margin:16px 0 8px 0; line-height:1.3;">${p1}</h3>`;
     });
     
-    // Split into paragraphs and wrap each in <p> tags (but not if already wrapped in a tag)
+    // Convert Unicode bullet points (•) to proper <li> tags
+    // Also handle any - or * bullets that might slip through
+    formatted = formatted.replace(/^\s*[•\-*]\s+(.+)$/gm, '<li style="margin:6px 0; line-height:1.5;">$1</li>');
+    
+    // Wrap consecutive <li> tags in <ul> with clean styling
+    formatted = formatted.replace(/(<li[^>]*>.*?<\/li>\s*)+/gs, (match) => {
+      return `<ul style="margin:8px 0 16px 0; padding-left:20px; font-family:Arial,sans-serif; font-size:14px; color:#333; list-style-type:disc;">${match}</ul>`;
+    });
+    
+    // Handle any remaining text paragraphs (text not in headings or lists)
     const lines = formatted.split('\n\n');
     formatted = lines.map(line => {
       line = line.trim();
       if (!line) return '';
       // Don't wrap if already has HTML tags
-      if (line.startsWith('<h') || line.startsWith('<ul') || line.startsWith('<li')) {
+      if (line.startsWith('<h') || line.startsWith('<ul') || line.startsWith('<li>')) {
         return line;
       }
       return `<p style="font-family:Arial,sans-serif; font-size:14px; color:#333; line-height:1.6; margin:0 0 12px 0;">${line}</p>`;

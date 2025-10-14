@@ -268,33 +268,55 @@ async function generateAISummary(comparisonData: any[], filing: any): Promise<st
     return "AI summary unavailable - API key not configured";
   }
 
-  const prompt = `Analyze this portfolio data for Duquesne Family Office LLC's ${filing.quarter} ${filing.year} 13F filing and provide a concise executive summary highlighting:
-1. Top 3-5 holdings by value
-2. Notable quarter-over-quarter changes (new positions, increased/decreased positions)
-3. Year-over-year trends
-4. Overall portfolio concentration and diversification
+  const prompt = `Analyze this portfolio data for Duquesne Family Office LLC's ${filing.quarter} ${filing.year} 13F filing and generate an executive summary following this EXACT structure:
 
 Portfolio Data:
 ${JSON.stringify(comparisonData.slice(0, 15), null, 2)}
 
+REQUIRED STRUCTURE (follow exactly):
+
+**Top Holdings**
+• [Company Name] – $[value] ([% of total portfolio value])
+• [Company Name] – $[value] ([% of total portfolio value])
+• [Company Name] – $[value] ([% of total portfolio value])
+• [Company Name] – $[value] ([% of total portfolio value])
+• [Company Name] – $[value] ([% of total portfolio value])
+
+**QoQ Change**
+
+**New Position**
+• [Company Name] – $[value] ([% of total portfolio value])
+[List all new positions, or state "None" if no new positions]
+
+**Increased Position**
+• [Company Name] – Increased by $[Δ value] (+[Δ percentage points]% of total portfolio value)
+[List all increased positions, or state "None" if no increases]
+
+**Decreased Position**
+• [Company Name] – Decreased by $[Δ value] (−[Δ percentage points]% of total portfolio value)
+[List all decreased positions, or state "None" if no decreases]
+
+**YoY Change**
+• [Brief narrative describing notable YoY changes in same format]
+
 CRITICAL FORMATTING RULES:
-- ALL dollar amounts MUST include the "$" symbol (e.g., "$132.7M", "$99.9M", "+$122.3M", "-$81.0M")
-- Use consistent formatting: "$" + value + "M" or "B" for millions/billions
-- Include "$" even for positive and negative changes (e.g., "+$50M", "-$25M")
-- Never write amounts without the "$" symbol (e.g., "+122.3M" is WRONG, must be "+$122.3M")
+1. Use Unicode bullet character • (not dash or asterisk) for ALL list items
+2. Bold section headers using **Header Text**
+3. Company names should NOT be bolded in the list items
+4. Dollar amounts: Always use "$" symbol with M or B suffix (e.g., "$132.7M", "$1.5B")
+5. For changes, include both: dollar amount AND "([X.X]% of total portfolio value)"
+6. Use exactly two decimal places for percentages
+7. For increases: "Increased by $[amount] (+[percentage points]% of total portfolio value)"
+8. For decreases: "Decreased by $[amount] (−[percentage points]% of total portfolio value)"
+9. Maintain one blank line between major sections
+10. Keep total summary under 250 words
 
-STRUCTURE AND FORMATTING REQUIREMENTS:
-- Start with a brief overview paragraph about top holdings
-- Use THREE separate sections with headers: "New Positions:", "Increased Positions:", and "Decreased Positions:"
-- Format each section as BULLET POINTS (use "- " for each item)
-- BOLD all company names using **Company Name** markdown syntax
-- For every position change, include BOTH dollar amount AND percentage of total portfolio value
-- Percentage format: Use "(X.X% of total portfolio value)" to be crystal clear
-- Example format for new positions: "- **Entegris Inc** at $132.7M (3.3% of total portfolio value)"
-- Example format for increases: "- **Insmed Inc** saw the largest increase at +$122.3M, representing 2.8% of total portfolio value"
-- Example format for decreases: "- **Coupang Inc** recorded the largest decrease at -$81.0M, reducing its share to 1.5% of total portfolio value"
-
-Keep the summary professional, data-driven, and under 250 words.`;
+DATA RULES:
+- Top Holdings: Select top 5 by current value, sorted descending
+- New Position: priorQValue == 0 and currentValue > 0
+- Increased Position: currentValue > priorQValue (show absolute dollar change and percentage point change)
+- Decreased Position: currentValue < priorQValue (show absolute dollar reduction and percentage point change)
+- Percentage points refer to the change in % of total portfolio value (e.g., from 2.5% to 4.2% = +1.7 percentage points)`;
 
   try {
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
