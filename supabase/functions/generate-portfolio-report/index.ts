@@ -86,6 +86,97 @@ function getQuarterEndDate(quarter: string, year: number): string {
   return quarterEndDates[quarter] || `${year}-12-31`;
 }
 
+// Helper function to fetch EOD price from Yahoo Finance
+async function fetchYahooEODPrice(ticker: string, date: string): Promise<number | null> {
+  if (!ticker || ticker === 'N/A') return null;
+  
+  try {
+    const normalizedTicker = normalizeTicker(ticker);
+    const endDate = new Date(date);
+    endDate.setDate(endDate.getDate() + 1); // Add 1 day to include the target date
+    const startDate = new Date(date);
+    startDate.setDate(startDate.getDate() - 7); // Look back 7 days to find nearest trading day
+    
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${normalizedTicker}?period1=${Math.floor(startDate.getTime() / 1000)}&period2=${Math.floor(endDate.getTime() / 1000)}&interval=1d`;
+    
+    console.log(`[Yahoo EOD] Fetching price for ${normalizedTicker} on ${date}`);
+    
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    
+    if (!response.ok) {
+      console.error(`[Yahoo EOD] API error for ${normalizedTicker}: ${response.status}`);
+      return null;
+    }
+    
+    const data = await response.json();
+    const result = data?.chart?.result?.[0];
+    
+    if (!result || !result.timestamp || result.timestamp.length === 0) {
+      console.log(`[Yahoo EOD] No price data found for ${normalizedTicker} on ${date}`);
+      return null;
+    }
+    
+    // Get the last available close price (nearest trading day)
+    const closes = result.indicators?.quote?.[0]?.close || [];
+    const lastClose = closes[closes.length - 1];
+    
+    if (lastClose && lastClose > 0) {
+      console.log(`[Yahoo EOD] Found price for ${normalizedTicker} on ${date}: $${lastClose.toFixed(2)}`);
+      return lastClose;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error(`[Yahoo EOD] Exception for ${ticker}:`, error);
+    return null;
+  }
+}
+
+// Helper function to get EOD price with caching and Yahoo fallback
+async function getEODPrice(ticker: string, reportDate: string, supabase: any): Promise<number | null> {
+  if (!ticker || ticker === 'N/A') return null;
+  
+  const normalizedTicker = normalizeTicker(ticker);
+  
+  // Check cache first
+  const { data: cached } = await supabase
+    .from('price_cache')
+    .select('price')
+    .eq('ticker', normalizedTicker)
+    .eq('report_date', reportDate)
+    .maybeSingle();
+  
+  if (cached?.price && cached.price > 0) {
+    console.log(`[Price Cache] Using cached price for ${normalizedTicker} on ${reportDate}: $${cached.price}`);
+    return cached.price;
+  }
+  
+  // Fallback to Yahoo Finance
+  console.log(`[Price Cache] No cached price for ${normalizedTicker} on ${reportDate}, using Yahoo Finance fallback`);
+  const yahooPrice = await fetchYahooEODPrice(normalizedTicker, reportDate);
+  
+  if (yahooPrice && yahooPrice > 0) {
+    // Store in cache for future use
+    await supabase
+      .from('price_cache')
+      .upsert({
+        ticker: normalizedTicker,
+        report_date: reportDate,
+        price: yahooPrice,
+        created_at: new Date().toISOString()
+      }, {
+        onConflict: 'ticker,report_date'
+      });
+    
+    console.log(`[Price Cache] Stored Yahoo Finance price for ${normalizedTicker} on ${reportDate}: $${yahooPrice.toFixed(2)}`);
+    return yahooPrice;
+  }
+  
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -203,15 +294,45 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
     }
   }
 
-  // Now build the comparison table
+  // Get reporting dates for EOD price lookups
+  const currentReportDate = getQuarterEndDate(current.quarter, current.year);
+  const priorQReportDate = priorQ ? getQuarterEndDate(priorQ.quarter, priorQ.year) : null;
+  const priorYReportDate = priorY ? getQuarterEndDate(priorY.quarter, priorY.year) : null;
+
+  // Now build the comparison table with EOD price fallback
   for (const holding of currentHoldings) {
     const priorQHolding = priorQ?.holdings?.find((h: any) => h.cusip === holding.cusip);
     const priorYHolding = priorY?.holdings?.find((h: any) => h.cusip === holding.cusip);
 
-    // Calculate average purchase price
-    const currentAvgPrice = holding.shares > 0 ? holding.value_usd / holding.shares : 0;
-    const priorQAvgPrice = priorQHolding?.shares > 0 ? priorQHolding.value_usd / priorQHolding.shares : 0;
-    const priorYAvgPrice = priorYHolding?.shares > 0 ? priorYHolding.value_usd / priorYHolding.shares : 0;
+    // Calculate average purchase price from holdings data
+    let currentAvgPrice = holding.shares > 0 ? holding.value_usd / holding.shares : 0;
+    let priorQAvgPrice = priorQHolding?.shares > 0 ? priorQHolding.value_usd / priorQHolding.shares : 0;
+    let priorYAvgPrice = priorYHolding?.shares > 0 ? priorYHolding.value_usd / priorYHolding.shares : 0;
+
+    // Fallback to Yahoo Finance EOD prices if average price is missing or zero
+    if ((!currentAvgPrice || currentAvgPrice === 0) && holding.ticker && holding.ticker !== 'N/A') {
+      const eodPrice = await getEODPrice(holding.ticker, currentReportDate, supabase);
+      if (eodPrice && eodPrice > 0) {
+        currentAvgPrice = eodPrice;
+        console.log(`[EOD Fallback] Using Yahoo Finance price for ${holding.company_name} (${holding.ticker}) on ${currentReportDate}: $${eodPrice.toFixed(2)}`);
+      }
+    }
+
+    if ((!priorQAvgPrice || priorQAvgPrice === 0) && priorQReportDate && holding.ticker && holding.ticker !== 'N/A') {
+      const eodPrice = await getEODPrice(holding.ticker, priorQReportDate, supabase);
+      if (eodPrice && eodPrice > 0) {
+        priorQAvgPrice = eodPrice;
+        console.log(`[EOD Fallback] Using Yahoo Finance price for ${holding.company_name} (${holding.ticker}) on ${priorQReportDate}: $${eodPrice.toFixed(2)}`);
+      }
+    }
+
+    if ((!priorYAvgPrice || priorYAvgPrice === 0) && priorYReportDate && holding.ticker && holding.ticker !== 'N/A') {
+      const eodPrice = await getEODPrice(holding.ticker, priorYReportDate, supabase);
+      if (eodPrice && eodPrice > 0) {
+        priorYAvgPrice = eodPrice;
+        console.log(`[EOD Fallback] Using Yahoo Finance price for ${holding.company_name} (${holding.ticker}) on ${priorYReportDate}: $${eodPrice.toFixed(2)}`);
+      }
+    }
 
     const row = {
       company: holding.company_name,
