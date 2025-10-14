@@ -204,14 +204,18 @@ function generateEmailHTML(reportData: any): string {
     const qoqValueClass = holding.qoqValueChange >= 0 ? 'positive' : 'negative';
     const qoqPctClass = holding.qoqPctChange >= 0 ? 'positive' : 'negative';
     const qoqAvgPriceClass = holding.qoqAvgPriceChange >= 0 ? 'positive' : 'negative';
-    const qoqEodPriceClass = holding.qoqEodPriceChange >= 0 ? 'positive' : 'negative';
+    const qoqAvgPriceChangePctClass = holding.qoqAvgPriceChangePct !== null && holding.qoqAvgPriceChangePct >= 0 ? 'positive' : 'negative';
     const yoyValueClass = holding.yoyValueChange >= 0 ? 'positive' : 'negative';
     const yoyPctClass = holding.yoyPctChange >= 0 ? 'positive' : 'negative';
     const yoyAvgPriceClass = holding.yoyAvgPriceChange >= 0 ? 'positive' : 'negative';
-    const yoyEodPriceClass = holding.yoyEodPriceChange >= 0 ? 'positive' : 'negative';
+    const yoyAvgPriceChangePctClass = holding.yoyAvgPriceChangePct !== null && holding.yoyAvgPriceChangePct >= 0 ? 'positive' : 'negative';
+    
+    // Format percentage changes or show em-dash if null
+    const qoqPriceChangePct = holding.qoqAvgPriceChangePct !== null ? formatPercent(holding.qoqAvgPriceChangePct) : '—';
+    const yoyPriceChangePct = holding.yoyAvgPriceChangePct !== null ? formatPercent(holding.yoyAvgPriceChangePct) : '—';
     
     // Compact HTML without extra whitespace to avoid encoding issues
-    tableRows += `<tr><td class="company">${holding.company}</td><td class="right">${formatCurrency(holding.currentValue)}</td><td class="right">${holding.currentPct.toFixed(2)}%</td><td class="right">${formatPrice(holding.currentAvgPrice)}</td><td class="right">${formatPrice(holding.currentEodPrice)}</td><td class="right">${formatCurrency(holding.priorQValue)}</td><td class="right">${holding.priorQPct.toFixed(2)}%</td><td class="right">${formatPrice(holding.priorQAvgPrice)}</td><td class="right">${formatPrice(holding.priorQEodPrice)}</td><td class="right ${qoqValueClass}">${formatCurrency(holding.qoqValueChange)}</td><td class="right ${qoqPctClass}">${formatPercent(holding.qoqPctChange)}</td><td class="right ${qoqAvgPriceClass}">${formatPrice(Math.abs(holding.qoqAvgPriceChange))}</td><td class="right ${qoqEodPriceClass}">${formatPrice(Math.abs(holding.qoqEodPriceChange))}</td><td class="right">${formatCurrency(holding.priorYValue)}</td><td class="right">${holding.priorYPct.toFixed(2)}%</td><td class="right">${formatPrice(holding.priorYAvgPrice)}</td><td class="right">${formatPrice(holding.priorYEodPrice)}</td><td class="right ${yoyValueClass}">${formatCurrency(holding.yoyValueChange)}</td><td class="right ${yoyPctClass}">${formatPercent(holding.yoyPctChange)}</td><td class="right ${yoyAvgPriceClass}">${formatPrice(Math.abs(holding.yoyAvgPriceChange))}</td><td class="right ${yoyEodPriceClass}">${formatPrice(Math.abs(holding.yoyEodPriceChange))}</td></tr>`;
+    tableRows += `<tr><td class="company">${holding.company}</td><td class="right">${formatCurrency(holding.currentValue)}</td><td class="right">${holding.currentPct.toFixed(2)}%</td><td class="right">${formatPrice(holding.currentAvgPrice)}</td><td class="right">${formatCurrency(holding.priorQValue)}</td><td class="right">${holding.priorQPct.toFixed(2)}%</td><td class="right">${formatPrice(holding.priorQAvgPrice)}</td><td class="right ${qoqValueClass}">${formatCurrency(holding.qoqValueChange)}</td><td class="right ${qoqPctClass}">${formatPercent(holding.qoqPctChange)}</td><td class="right ${qoqAvgPriceChangePctClass}">${qoqPriceChangePct}</td><td class="right">${formatCurrency(holding.priorYValue)}</td><td class="right">${holding.priorYPct.toFixed(2)}%</td><td class="right">${formatPrice(holding.priorYAvgPrice)}</td><td class="right ${yoyValueClass}">${formatCurrency(holding.yoyValueChange)}</td><td class="right ${yoyPctClass}">${formatPercent(holding.yoyPctChange)}</td><td class="right ${yoyAvgPriceChangePctClass}">${yoyPriceChangePct}</td></tr>`;
   }
 
   return `
@@ -266,24 +270,19 @@ function generateEmailHTML(reportData: any): string {
             <th>Company</th>
             <th class="right">Current ($)</th>
             <th class="right">Current (%)</th>
-            <th class="right">Avg Price</th>
-            <th class="right">EOD Price</th>
+            <th class="right">EOD Stock Price</th>
             <th class="right">Prior Q ($)</th>
-            <th class="right">Prior Q (%)</th>
-            <th class="right">Prior Q Avg</th>
-            <th class="right">Prior Q EOD</th>
+            <th class="right">Prior Q (% of Total)</th>
+            <th class="right">Prior Q EOD Stock Price</th>
             <th class="right">QoQ &Delta; ($)</th>
-            <th class="right">QoQ &Delta; (%)</th>
-            <th class="right">QoQ &Delta; Avg</th>
-            <th class="right">QoQ &Delta; EOD</th>
+            <th class="right">QoQ &Delta; (Percentage Points)</th>
+            <th class="right">QoQ &Delta; EOD Price (%)</th>
             <th class="right">Prior Y ($)</th>
-            <th class="right">Prior Y (%)</th>
-            <th class="right">Prior Y Avg</th>
-            <th class="right">Prior Y EOD</th>
+            <th class="right">Prior Y (% of Total)</th>
+            <th class="right">Prior Y EOD Stock Price</th>
             <th class="right">YoY &Delta; ($)</th>
-            <th class="right">YoY &Delta; (%)</th>
-            <th class="right">YoY &Delta; Avg</th>
-            <th class="right">YoY &Delta; EOD</th>
+            <th class="right">YoY &Delta; (Percentage Points)</th>
+            <th class="right">YoY &Delta; EOD Price (%)</th>
           </tr>
         </thead>
         <tbody>
