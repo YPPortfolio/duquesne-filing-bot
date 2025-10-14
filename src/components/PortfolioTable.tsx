@@ -33,6 +33,27 @@ export function PortfolioTable({ data, filing }: PortfolioTableProps) {
     };
     return quarterEndDates[filing.quarter] || '';
   };
+
+  // Collect unique footnotes
+  const collectFootnotes = () => {
+    const footnotes: string[] = [];
+    const footnoteMap = new Map<string, number>();
+    
+    data.forEach(row => {
+      if (row.priorQPriceNote && !footnoteMap.has(row.priorQPriceNote)) {
+        footnotes.push(row.priorQPriceNote);
+        footnoteMap.set(row.priorQPriceNote, footnotes.length);
+      }
+      if (row.priorYPriceNote && !footnoteMap.has(row.priorYPriceNote)) {
+        footnotes.push(row.priorYPriceNote);
+        footnoteMap.set(row.priorYPriceNote, footnotes.length);
+      }
+    });
+    
+    return { footnotes, footnoteMap };
+  };
+
+  const { footnotes, footnoteMap } = collectFootnotes();
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -108,7 +129,14 @@ export function PortfolioTable({ data, filing }: PortfolioTableProps) {
                 <TableCell className="text-right">{formatPrice(row.currentAvgPrice)}</TableCell>
                 <TableCell className="text-right text-muted-foreground border-l-2 border-primary/30">{formatCurrency(row.priorQValue)}</TableCell>
                 <TableCell className="text-right text-muted-foreground">{row.priorQPct.toFixed(2)}%</TableCell>
-                <TableCell className="text-right text-muted-foreground">{formatPrice(row.priorQAvgPrice)}</TableCell>
+                <TableCell className="text-right text-muted-foreground">
+                  {formatPrice(row.priorQAvgPrice)}
+                  {row.priorQPriceNote && (
+                    <sup className="text-primary font-medium ml-0.5">
+                      {footnoteMap.get(row.priorQPriceNote)}
+                    </sup>
+                  )}
+                </TableCell>
                 <TableCell className={`text-right font-semibold ${getChangeColor(row.qoqValueChange)}`}>
                   {getChangeIcon(row.qoqValueChange)} {formatCurrency(row.qoqValueChange)}
                 </TableCell>
@@ -120,7 +148,14 @@ export function PortfolioTable({ data, filing }: PortfolioTableProps) {
                 </TableCell>
                 <TableCell className="text-right text-muted-foreground border-l-2 border-primary/30">{formatCurrency(row.priorYValue)}</TableCell>
                 <TableCell className="text-right text-muted-foreground">{row.priorYPct.toFixed(2)}%</TableCell>
-                <TableCell className="text-right text-muted-foreground">{formatPrice(row.priorYAvgPrice)}</TableCell>
+                <TableCell className="text-right text-muted-foreground">
+                  {formatPrice(row.priorYAvgPrice)}
+                  {row.priorYPriceNote && (
+                    <sup className="text-primary font-medium ml-0.5">
+                      {footnoteMap.get(row.priorYPriceNote)}
+                    </sup>
+                  )}
+                </TableCell>
                 <TableCell className={`text-right font-semibold ${getChangeColor(row.yoyValueChange)}`}>
                   {getChangeIcon(row.yoyValueChange)} {formatCurrency(row.yoyValueChange)}
                 </TableCell>
@@ -136,8 +171,23 @@ export function PortfolioTable({ data, filing }: PortfolioTableProps) {
         </Table>
       </div>
       
-      <div className="p-4 border-t border-border bg-muted/20 text-sm text-muted-foreground text-center">
-        Displaying Top 20 Holdings by Portfolio Weight
+      <div className="p-4 border-t border-border bg-muted/20">
+        <p className="text-sm text-muted-foreground text-center mb-2">
+          Displaying Top 20 Holdings by Portfolio Weight
+        </p>
+        {footnotes.length > 0 && (
+          <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border/50">
+            <p className="font-semibold mb-2">Footnotes:</p>
+            <ul className="space-y-1">
+              {footnotes.map((note, index) => (
+                <li key={index}>
+                  <sup className="text-primary font-medium mr-1">{index + 1}</sup>
+                  {note}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </Card>
   );

@@ -309,6 +309,9 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
     let priorQAvgPrice = priorQHolding?.shares > 0 ? priorQHolding.value_usd / priorQHolding.shares : 0;
     let priorYAvgPrice = priorYHolding?.shares > 0 ? priorYHolding.value_usd / priorYHolding.shares : 0;
 
+    let priorQPriceNote = null;
+    let priorYPriceNote = null;
+
     // Fallback to Yahoo Finance EOD prices if average price is missing or zero
     if ((!currentAvgPrice || currentAvgPrice === 0) && holding.ticker && holding.ticker !== 'N/A') {
       const eodPrice = await getEODPrice(holding.ticker, currentReportDate, supabase);
@@ -318,20 +321,34 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
       }
     }
 
-    if ((!priorQAvgPrice || priorQAvgPrice === 0) && priorQReportDate && holding.ticker && holding.ticker !== 'N/A') {
-      const eodPrice = await getEODPrice(holding.ticker, priorQReportDate, supabase);
-      if (eodPrice && eodPrice > 0) {
-        priorQAvgPrice = eodPrice;
-        console.log(`[EOD Fallback] Using Yahoo Finance price for ${holding.company_name} (${holding.ticker}) on ${priorQReportDate}: $${eodPrice.toFixed(2)}`);
+    // Only fetch prior quarter EOD price if the position existed in that period
+    if (priorQHolding && priorQHolding.value_usd > 0) {
+      if ((!priorQAvgPrice || priorQAvgPrice === 0) && priorQReportDate && holding.ticker && holding.ticker !== 'N/A') {
+        const eodPrice = await getEODPrice(holding.ticker, priorQReportDate, supabase);
+        if (eodPrice && eodPrice > 0) {
+          priorQAvgPrice = eodPrice;
+          console.log(`[EOD Fallback] Using Yahoo Finance price for ${holding.company_name} (${holding.ticker}) on ${priorQReportDate}: $${eodPrice.toFixed(2)}`);
+        } else {
+          priorQPriceNote = 'Price data unavailable';
+        }
       }
+    } else if (!priorQHolding || priorQHolding.value_usd === 0) {
+      priorQPriceNote = 'Position not held in this period';
     }
 
-    if ((!priorYAvgPrice || priorYAvgPrice === 0) && priorYReportDate && holding.ticker && holding.ticker !== 'N/A') {
-      const eodPrice = await getEODPrice(holding.ticker, priorYReportDate, supabase);
-      if (eodPrice && eodPrice > 0) {
-        priorYAvgPrice = eodPrice;
-        console.log(`[EOD Fallback] Using Yahoo Finance price for ${holding.company_name} (${holding.ticker}) on ${priorYReportDate}: $${eodPrice.toFixed(2)}`);
+    // Only fetch prior year EOD price if the position existed in that period
+    if (priorYHolding && priorYHolding.value_usd > 0) {
+      if ((!priorYAvgPrice || priorYAvgPrice === 0) && priorYReportDate && holding.ticker && holding.ticker !== 'N/A') {
+        const eodPrice = await getEODPrice(holding.ticker, priorYReportDate, supabase);
+        if (eodPrice && eodPrice > 0) {
+          priorYAvgPrice = eodPrice;
+          console.log(`[EOD Fallback] Using Yahoo Finance price for ${holding.company_name} (${holding.ticker}) on ${priorYReportDate}: $${eodPrice.toFixed(2)}`);
+        } else {
+          priorYPriceNote = 'Price data unavailable';
+        }
       }
+    } else if (!priorYHolding || priorYHolding.value_usd === 0) {
+      priorYPriceNote = 'Position not held in this period';
     }
 
     const row = {
@@ -344,6 +361,7 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
       priorQValue: priorQHolding?.value_usd || 0,
       priorQPct: priorQHolding?.percentage_of_portfolio || 0,
       priorQAvgPrice: priorQAvgPrice,
+      priorQPriceNote: priorQPriceNote,
       qoqValueChange: holding.value_usd - (priorQHolding?.value_usd || 0),
       qoqPctChange: holding.percentage_of_portfolio - (priorQHolding?.percentage_of_portfolio || 0),
       qoqAvgPriceChange: currentAvgPrice - priorQAvgPrice,
@@ -351,6 +369,7 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
       priorYValue: priorYHolding?.value_usd || 0,
       priorYPct: priorYHolding?.percentage_of_portfolio || 0,
       priorYAvgPrice: priorYAvgPrice,
+      priorYPriceNote: priorYPriceNote,
       yoyValueChange: holding.value_usd - (priorYHolding?.value_usd || 0),
       yoyPctChange: holding.percentage_of_portfolio - (priorYHolding?.percentage_of_portfolio || 0),
       yoyAvgPriceChange: currentAvgPrice - priorYAvgPrice,
