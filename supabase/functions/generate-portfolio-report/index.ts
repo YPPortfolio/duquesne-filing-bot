@@ -289,11 +289,11 @@ REQUIRED STRUCTURE (follow exactly):
 [List all new positions, or state "None" if no new positions]
 
 **Increased Position**
-• [Company Name] – Increased by $[Δ value] (+[Δ percentage points]% of total portfolio value)
+• [Company Name] – Increased by $[Δ value] (+[Δ percentage points] percentage points of total portfolio value)
 [List all increased positions, or state "None" if no increases]
 
 **Decreased Position**
-• [Company Name] – Decreased by $[Δ value] (−[Δ percentage points]% of total portfolio value)
+• [Company Name] – Decreased by $[Δ value] (−[Δ percentage points] percentage points of total portfolio value)
 [List all decreased positions, or state "None" if no decreases]
 
 **YoY Change**
@@ -306,8 +306,8 @@ CRITICAL FORMATTING RULES:
 4. Dollar amounts: Always use "$" symbol with M or B suffix (e.g., "$132.7M", "$1.5B")
 5. For changes, include both: dollar amount AND "([X.X]% of total portfolio value)"
 6. Use exactly two decimal places for percentages
-7. For increases: "Increased by $[amount] (+[percentage points]% of total portfolio value)"
-8. For decreases: "Decreased by $[amount] (−[percentage points]% of total portfolio value)"
+7. For increases: "Increased by $[amount] (+[percentage points] percentage points of total portfolio value)"
+8. For decreases: "Decreased by $[amount] (−[percentage points] percentage points of total portfolio value)"
 9. Maintain one blank line between major sections
 10. Keep total summary under 250 words
 
