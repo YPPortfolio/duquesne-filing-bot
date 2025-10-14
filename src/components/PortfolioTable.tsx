@@ -95,7 +95,7 @@ export function PortfolioTable({ data, filing }: PortfolioTableProps) {
               <TableHead className="text-right font-semibold">Prior Y (% of Total)</TableHead>
               <TableHead className="text-right font-semibold">Prior Y EOD Stock Price</TableHead>
               <TableHead className="text-right font-semibold">YoY Δ ($)</TableHead>
-              <TableHead className="text-right font-semibold">YoY Δ (percentage points)</TableHead>
+              <TableHead className="text-right font-semibold">YoY Δ (Percentage Points)</TableHead>
               <TableHead className="text-right font-semibold">YoY Δ EOD Price (%)</TableHead>
             </TableRow>
           </TableHeader>
