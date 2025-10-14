@@ -321,34 +321,36 @@ async function generateComparisonTable(current: any, priorQ: any, priorY: any, s
       }
     }
 
-    // Only fetch prior quarter EOD price if the position existed in that period
-    if (priorQHolding && priorQHolding.value_usd > 0) {
-      if ((!priorQAvgPrice || priorQAvgPrice === 0) && priorQReportDate && holding.ticker && holding.ticker !== 'N/A') {
-        const eodPrice = await getEODPrice(holding.ticker, priorQReportDate, supabase);
-        if (eodPrice && eodPrice > 0) {
-          priorQAvgPrice = eodPrice;
-          console.log(`[EOD Fallback] Using Yahoo Finance price for ${holding.company_name} (${holding.ticker}) on ${priorQReportDate}: $${eodPrice.toFixed(2)}`);
-        } else {
-          priorQPriceNote = 'Price data unavailable';
-        }
+    // Always fetch prior quarter EOD price from Yahoo Finance if ticker exists
+    if ((!priorQAvgPrice || priorQAvgPrice === 0) && priorQReportDate && holding.ticker && holding.ticker !== 'N/A') {
+      const eodPrice = await getEODPrice(holding.ticker, priorQReportDate, supabase);
+      if (eodPrice && eodPrice > 0) {
+        priorQAvgPrice = eodPrice;
+        console.log(`[EOD Fallback] Using Yahoo Finance price for ${holding.company_name} (${holding.ticker}) on ${priorQReportDate}: $${eodPrice.toFixed(2)}`);
+      } else {
+        priorQPriceNote = 'Price data unavailable from Yahoo Finance';
       }
-    } else if (!priorQHolding || priorQHolding.value_usd === 0) {
-      priorQPriceNote = 'Position not held in this period';
     }
 
-    // Only fetch prior year EOD price if the position existed in that period
-    if (priorYHolding && priorYHolding.value_usd > 0) {
-      if ((!priorYAvgPrice || priorYAvgPrice === 0) && priorYReportDate && holding.ticker && holding.ticker !== 'N/A') {
-        const eodPrice = await getEODPrice(holding.ticker, priorYReportDate, supabase);
-        if (eodPrice && eodPrice > 0) {
-          priorYAvgPrice = eodPrice;
-          console.log(`[EOD Fallback] Using Yahoo Finance price for ${holding.company_name} (${holding.ticker}) on ${priorYReportDate}: $${eodPrice.toFixed(2)}`);
-        } else {
-          priorYPriceNote = 'Price data unavailable';
-        }
+    // Set footnote if position wasn't held in prior quarter
+    if ((!priorQHolding || priorQHolding.value_usd === 0) && priorQAvgPrice > 0) {
+      priorQPriceNote = 'Position not held in this period (price shown for reference)';
+    }
+
+    // Always fetch prior year EOD price from Yahoo Finance if ticker exists
+    if ((!priorYAvgPrice || priorYAvgPrice === 0) && priorYReportDate && holding.ticker && holding.ticker !== 'N/A') {
+      const eodPrice = await getEODPrice(holding.ticker, priorYReportDate, supabase);
+      if (eodPrice && eodPrice > 0) {
+        priorYAvgPrice = eodPrice;
+        console.log(`[EOD Fallback] Using Yahoo Finance price for ${holding.company_name} (${holding.ticker}) on ${priorYReportDate}: $${eodPrice.toFixed(2)}`);
+      } else {
+        priorYPriceNote = 'Price data unavailable from Yahoo Finance';
       }
-    } else if (!priorYHolding || priorYHolding.value_usd === 0) {
-      priorYPriceNote = 'Position not held in this period';
+    }
+
+    // Set footnote if position wasn't held in prior year
+    if ((!priorYHolding || priorYHolding.value_usd === 0) && priorYAvgPrice > 0) {
+      priorYPriceNote = 'Position not held in this period (price shown for reference)';
     }
 
     const row = {
